@@ -11,7 +11,8 @@ namespace TalkingBotMain
 {
     internal class Program
     {
-        public static Task Main(string[] args) => MainAsync(args);
+        public static Task Main(string[] args) => 
+            MainAsync(args);
 
         private static async Task MainAsync(string[] args)
         {
