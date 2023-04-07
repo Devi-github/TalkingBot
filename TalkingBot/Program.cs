@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using System.Linq;
 using TalkingBot.Core;
 using TalkingBot;
+using Discord.WebSocket;
 
 namespace TalkingBotMain
 {
@@ -37,7 +38,27 @@ namespace TalkingBotMain
             jsonconfig = File.ReadAllText(cnfpath);
             TalkingBotConfig config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig)!;
 
-            Client client = new(config.Token);
+            Console.Clear();
+
+            SlashCommandHandler handler = new SlashCommandHandler()
+                .AddCommand(new()
+                {
+                    name = "echo",
+                    description = "Echo a message",
+                    Handler = HandleEcho,
+                    options = new List<SlashCommandOption>
+                    {
+                        new()
+                        {
+                            name = "message",
+                            description = "Message to echo",
+                            optionType = Discord.ApplicationCommandOptionType.String,
+                            isRequired = true,
+                        }
+                    }
+                });
+
+            TalkingBotClient client = new(config, handler);
 
             Console.CancelKeyPress += delegate
             {
@@ -48,6 +69,10 @@ namespace TalkingBotMain
             await client.Run();
 
             await Task.Delay(-1);
+        }
+        public static async Task HandleEcho(SocketSlashCommand cmd)
+        {
+            await cmd.RespondAsync((string)cmd.Data.Options.First().Value);
         }
     }
 }

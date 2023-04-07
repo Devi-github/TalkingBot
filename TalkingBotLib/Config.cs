@@ -23,11 +23,11 @@ namespace TalkingBot
                 Environment.Exit(-1);
             }
             config.Token = token;
-            config.Guilds = new string[] { };
+            config.Guilds = new ulong[] { };
 
             using (StreamWriter sw = new(cnfpath))
             {
-                await sw.WriteAsync(JsonConvert.SerializeObject(config));
+                await sw.WriteAsync(JsonConvert.SerializeObject(config, Formatting.Indented));
             }
             Console.WriteLine($"Config successfully created at {cnfpath}. You may edit some parameters there to your liking.");
         }
