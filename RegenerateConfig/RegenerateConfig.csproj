@@ -5,12 +5,8 @@
     <TargetFramework>net7.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Discord.Net" Version="3.10.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TalkingBotLib\TalkingBotLib.csproj" />

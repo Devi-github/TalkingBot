@@ -5,6 +5,10 @@ VisualStudioVersion = 17.5.33516.290
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TalkingBot", "TalkingBot\TalkingBot.csproj", "{7D381B07-53C8-4B67-91E4-763B6E5FF8C5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RegenerateConfig", "RegenerateConfig\RegenerateConfig.csproj", "{28A61F08-5987-409C-BE3A-229A34F51F6B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TalkingBotLib", "TalkingBotLib\TalkingBotLib.csproj", "{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{7D381B07-53C8-4B67-91E4-763B6E5FF8C5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7D381B07-53C8-4B67-91E4-763B6E5FF8C5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7D381B07-53C8-4B67-91E4-763B6E5FF8C5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28A61F08-5987-409C-BE3A-229A34F51F6B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28A61F08-5987-409C-BE3A-229A34F51F6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28A61F08-5987-409C-BE3A-229A34F51F6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28A61F08-5987-409C-BE3A-229A34F51F6B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -3,13 +3,11 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 using System.Linq;
+using TalkingBot.Core;
+using TalkingBot;
 
-namespace TalkingBot
+namespace TalkingBotMain
 {
-    internal struct TalkingBotConfig
-    {
-        public string Token { get; set; }
-    }
     internal class Program
     {
         public static Task Main(string[] args) => MainAsync(args);
@@ -33,31 +31,23 @@ namespace TalkingBot
             }
             if(!File.Exists(cnfpath))
             {
-                await CreateDefaultConfig(cnfpath);
+                Console.WriteLine("Config not found at: {0}\nCreating new one...", cnfpath);
+                await Config.CreateDefaultConfig(cnfpath);
             }
             jsonconfig = File.ReadAllText(cnfpath);
             TalkingBotConfig config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig)!;
 
-            
-        }
-        private static async Task CreateDefaultConfig(string cnfpath)
-        {
-            TalkingBotConfig config = new();
+            Client client = new(config.Token);
 
-            Console.WriteLine("Config not found at: {0}\nCreating new one...", cnfpath);
-            Console.Write("Enter application token: ");
-            string? token = Console.ReadLine();
-            if(string.IsNullOrEmpty(token))
+            Console.CancelKeyPress += delegate
             {
-                Console.Error.WriteLine("Token is not specified!");
-                Environment.Exit(-1);
-            }
-            config.Token = token;
+                client.Dispose();
+                Environment.Exit(0);
+            };
 
-            using(StreamWriter sw = new(cnfpath))
-            {
-                await sw.WriteAsync(JsonConvert.SerializeObject(config));
-            }
+            await client.Run();
+
+            await Task.Delay(-1);
         }
     }
 }
