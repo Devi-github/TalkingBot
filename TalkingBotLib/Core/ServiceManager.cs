@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace TalkingBot.Core
 {
+    /// <summary>
+    /// Maybe unused
+    /// </summary>
     public class ServiceManager
     {
         public static IServiceProvider ServiceProvider { get; private set; }

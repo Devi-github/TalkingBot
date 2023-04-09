@@ -41,25 +41,7 @@ namespace TalkingBotMain
 
             Console.Clear();
 
-            SlashCommandHandler handler = new SlashCommandHandler()
-                .AddCommand(new()
-                {
-                    name = "echo",
-                    description = "Echo a message",
-                    Handler = HandleEcho,
-                    options = new List<SlashCommandOption>
-                    {
-                        new()
-                        {
-                            name = "message",
-                            description = "Message to echo",
-                            optionType = Discord.ApplicationCommandOptionType.String,
-                            isRequired = true,
-                        }
-                    }
-                });
-
-            TalkingBotClient client = new(config, handler);
+            TalkingBotClient client = new(config);
 
             Console.CancelKeyPress += delegate
             {

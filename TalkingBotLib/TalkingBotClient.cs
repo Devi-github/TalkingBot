@@ -14,6 +14,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Victoria.Player;
 using Victoria.Node;
 using Victoria;
+using TalkingBot.Utils;
+using TalkingBot.Core.Logging;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace TalkingBot
 {
@@ -22,14 +26,16 @@ namespace TalkingBot
         public InteractionService Service { get; set; }
         private string Token { get; set; }
 
-        private DiscordSocketClient _client;
-        private DiscordSocketConfig _config;
-
+        public static DiscordSocketClient _client;
+        private static DiscordSocketConfig _config;
+        private static TalkingBotConfig _talbConfig;
         private SlashCommandHandler _handler;
 
-        private LavaNode _lavaNode = ServiceManager.ServiceProvider.GetService<LavaNode>();
-        public TalkingBotClient(TalkingBotConfig tbConfig, SlashCommandHandler handler, DiscordSocketConfig? clientConfig = null)
+        public static LavaNode _lavaNode;
+        public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
+            _talbConfig = tbConfig;
+
             _config = new DiscordSocketConfig() {
                 MessageCacheSize = 100,
                 UseInteractionSnowflakeDate = true,
@@ -37,7 +43,7 @@ namespace TalkingBot
             };
             if (clientConfig != null) _config = clientConfig;
 
-            _handler = handler;
+            _handler = CommandsContainer.BuildHandler();
 
             _client = new(_config);
             _client.Log += Log;
@@ -45,21 +51,7 @@ namespace TalkingBot
             _client.MessageUpdated += MessageUpdated;
             _client.Ready += async () =>
             {
-                Console.WriteLine($"Logged in as {_client.CurrentUser.Username}");
-
-                try
-                {
-                    await _lavaNode.ConnectAsync();
-                } catch(Exception ex)
-                {
-                    Console.Error.WriteLine($"Lava node error: {ex}");
-                    Environment.Exit(-1);
-                }
-
-                for (int i = 0; i < tbConfig.Guilds.Length; i++)
-                {
-                    await _handler.BuildCommands(_client, tbConfig.Guilds[i]);
-                }
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", $"Logged in as {_client.CurrentUser.Username}!"));
             };
             _client.SlashCommandExecuted += _handler.HandleCommands;
 
@@ -71,41 +63,86 @@ namespace TalkingBot
 
             collection.AddSingleton(_client);
             collection.AddSingleton(_handler);
-            collection.AddSingleton<LavaNode>();
             collection.AddLavaNode(x =>
             {
                 x.SelfDeaf = false;
             });
-
             ServiceManager.SetProvider(collection);
+
+            LavaLogger logger = new LavaLogger(LogLevel.Information);
+
+            _lavaNode = new(_client, new()
+            {
+                Hostname = "localhost",
+                Port = 2333,
+                Authorization = "youshallnotpass",
+                SelfDeaf = false,
+                IsSecure = false,
+                SocketConfiguration = new() { ReconnectAttempts = 3, BufferSize = 1024, ReconnectDelay = TimeSpan.FromSeconds(5) }
+            }, logger);
+
+            _client.PresenceUpdated += PresenceUpdated;
+
+            RandomStatic.Initialize();
+
+            Logger.Initialize(LogLevel.Information);
+        }
+        private async Task PresenceUpdated(SocketUser user, SocketPresence oldPresence, SocketPresence newPresence)
+        {
+
         }
         public async Task Run()
         {
             await _client.LoginAsync(TokenType.Bot, Token);
             await _client.StartAsync();
 
+            while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(100);
+
+            foreach(ulong guildid in _talbConfig.Guilds)
+            {
+                await _handler.BuildCommands(_client, guildid);
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", $"Commands build successfully for GuildId {guildid}"));
+            }
+            await _client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+            
+            try
+            {
+                await _lavaNode.ConnectAsync();
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connecting..."));
+            }
+            catch (Exception ex)
+            {
+                await Log(new(LogSeverity.Critical, "TalkingBotClient.Run()", "Lavalink connection failed!", ex));
+            }
+            await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connected"));
+
             await Task.Delay(-1);
         }
         private async Task MessageUpdated(Cacheable<IMessage, ulong> before, SocketMessage after, ISocketMessageChannel channel)
         {
             var message = await before.GetOrDownloadAsync();
-            Console.WriteLine($"Message update: {message} -> {after}");
+            Logger.Instance?.LogDebug($"Message update: {message} -> {after}");
         }
         public void Dispose()
         {
-            _client.StopAsync();
-            GC.SuppressFinalize(_client);
+            _client.Dispose();
             GC.SuppressFinalize(this);
         }
         private Task Log(LogMessage message)
         {
-            if (message.Exception is CommandException cmdException)
-            {
-                Console.Error.WriteLine($"[{DateTime.Now}] {message.Severity}: Error occured: {cmdException.Command.Aliases.First()} " +
-                    $"failed to execute in {cmdException.Context.Channel}");
-                Console.Error.WriteLine(cmdException.Message);
-            }
-            else Console.WriteLine($"[{DateTime.Now}] {message.Severity}: {message.Message}");
+            if (Logger.Instance is null) throw new NullReferenceException("Logger instance was null");
+
+            LogSeverity sev = message.Severity;
+            if (sev == LogSeverity.Error)
+                Logger.Instance.Log(LogLevel.Error, message.Exception, message.Message);
+            else if (sev == LogSeverity.Warning)
+                Logger.Instance.Log(LogLevel.Warning, message.Exception, message.Message);
+            else if(sev == LogSeverity.Critical)
+                Logger.Instance.Log(LogLevel.Critical, message.Exception, message.Message);
+            else if(sev == LogSeverity.Info)
+                Logger.Instance.Log(LogLevel.Information, message.Exception, message.Message);
+            else if(sev == LogSeverity.Debug)
+                Logger.Instance.Log(LogLevel.Debug, message.Exception, message.Message);
 
             return Task.CompletedTask;
         }
