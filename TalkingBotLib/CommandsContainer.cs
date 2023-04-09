@@ -113,9 +113,9 @@ namespace TalkingBot
         private static async Task Play(SocketSlashCommand command)
         {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            string query = (string)command.Data.Options.ToList()[0].Value;
+            string query = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
             await RespondCommandAsync(command, await AudioManager.PlayAsync(command.User as SocketGuildUser, 
-                guild, query));
+                command.Channel as ITextChannel, guild, query));
         }
         private static async Task Leave(SocketSlashCommand command)
         {
@@ -141,7 +141,7 @@ namespace TalkingBot
         {
             long limit = 100;
             if(command.Data.Options.Count != 0)
-                limit = (long)command.Data.Options.ToList()[0].Value;
+                limit = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
 
             await RespondCommandAsync(command, new() { message = $"**{RandomStatic.NextInt64(limit) + 1}**/{limit}" });
         }

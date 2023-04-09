@@ -52,7 +52,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
-        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, IGuild guild, string query)
+        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, ITextChannel channel, IGuild guild, string query)
         {
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
 
@@ -60,7 +60,7 @@ namespace TalkingBot.Core.Music
             {
                 try
                 {
-                    await _lavaNode.JoinAsync(user.VoiceChannel);
+                    await _lavaNode.JoinAsync(user.VoiceChannel, channel);
                 } catch(Exception ex)
                 {
                     return new() { message = $"Error\n{ex.Message}" };
@@ -91,6 +91,8 @@ namespace TalkingBot.Core.Music
                 }
                 await player.PlayAsync(track);
 
+                await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
@@ -113,6 +115,8 @@ namespace TalkingBot.Core.Music
                 if (player.PlayerState is PlayerState.Playing) await player.StopAsync();
                 await _lavaNode.LeaveAsync(player.VoiceChannel);
 
+                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+
                 Logger.Instance?.LogInformation($"(AUDIO) Bot left the channel");
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
@@ -133,6 +137,8 @@ namespace TalkingBot.Core.Music
 
                 await player.StopAsync();
                 player.Vueue.Clear();
+
+                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
@@ -194,8 +200,11 @@ namespace TalkingBot.Core.Music
 
                 if (player.PlayerState is PlayerState.Paused) return new() { message = $"Music is paused. Resume to skip." };
                 if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) return new() { message = $"No songs in queue. Add a song with `/play` command" };
-
+                if (player.Vueue.Count == 0) return new() { message = $"Only currently playing song is in the queue. You can stop the playback using `/stop` or `/leave`" };
+                
                 await player.SkipAsync();
+
+                await TalkingBotClient._client.SetActivityAsync(new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
 
                 return new() { message = $"Skipped a song. Now playing {player.Track}" };
             }
@@ -226,7 +235,7 @@ namespace TalkingBot.Core.Music
                 int i = 1;
                 foreach(LavaTrack track in player.Vueue)
                 {
-                    embedBuilder.AddField($"{i}", $"[**[{track.Title}**]({track.Url})", false);
+                    embedBuilder.AddField($"{i}", $"[**{track.Title}**]({track.Url})", false);
                     i++;
                 }
 
@@ -262,7 +271,7 @@ namespace TalkingBot.Core.Music
         {
             if (arg.Reason != TrackEndReason.Finished)
                 return;
-            if (arg.Player.Vueue.TryDequeue(out var queueable))
+            if (!arg.Player.Vueue.TryDequeue(out var queueable))
                 return;
             if (!(queueable is LavaTrack track))
             {
@@ -271,6 +280,8 @@ namespace TalkingBot.Core.Music
             }
 
             await arg.Player.PlayAsync(track);
+
+            await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
 
             var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
