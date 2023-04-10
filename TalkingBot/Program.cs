@@ -53,9 +53,5 @@ namespace TalkingBotMain
 
             await Task.Delay(-1);
         }
-        public static async Task HandleEcho(SocketSlashCommand cmd)
-        {
-            await cmd.RespondAsync((string)cmd.Data.Options.First().Value);
-        }
     }
 }
