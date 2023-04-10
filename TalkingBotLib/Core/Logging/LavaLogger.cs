@@ -26,7 +26,8 @@ namespace TalkingBot.Core.Logging
             throw new NotImplementedException();
         }
 
-        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, 
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             if (logLevel < _level) return;
             Console.WriteLine($"[{DateTime.Now.ToString("T")}] [{logLevel}] " + formatter(state, exception));

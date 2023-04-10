@@ -18,20 +18,18 @@ using TalkingBot.Utils;
 using TalkingBot.Core.Logging;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using TalkingBot.Core.Music;
 
 namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
-        public InteractionService Service { get; set; }
-        private string Token { get; set; }
-
+        public static LavaNode _lavaNode;
         public static DiscordSocketClient _client;
         private static DiscordSocketConfig _config;
         private static TalkingBotConfig _talbConfig;
         private SlashCommandHandler _handler;
 
-        public static LavaNode _lavaNode;
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
             _talbConfig = tbConfig;
@@ -49,25 +47,13 @@ namespace TalkingBot
             _client.Log += Log;
 
             _client.MessageUpdated += MessageUpdated;
+            _client.UserVoiceStateUpdated += UserVoiceStateUpdated;
             _client.Ready += async () =>
             {
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", $"Logged in as {_client.CurrentUser.Username}!"));
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
+                    $"Logged in as {_client.CurrentUser.Username}!"));
             };
             _client.SlashCommandExecuted += _handler.HandleCommands;
-
-            Token = tbConfig.Token;
-
-            Service = new(_client.Rest);
-
-            var collection = new ServiceCollection();
-
-            collection.AddSingleton(_client);
-            collection.AddSingleton(_handler);
-            collection.AddLavaNode(x =>
-            {
-                x.SelfDeaf = false;
-            });
-            ServiceManager.SetProvider(collection);
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
 
@@ -78,14 +64,24 @@ namespace TalkingBot
                 Authorization = "youshallnotpass",
                 SelfDeaf = false,
                 IsSecure = false,
-                SocketConfiguration = new() { ReconnectAttempts = 3, BufferSize = 1024, ReconnectDelay = TimeSpan.FromSeconds(5) }
+                SocketConfiguration = new() { ReconnectAttempts = 3, BufferSize = 2048, 
+                    ReconnectDelay = TimeSpan.FromSeconds(5) }
             }, logger);
 
             _client.PresenceUpdated += PresenceUpdated;
 
             RandomStatic.Initialize();
 
-            Logger.Initialize(LogLevel.Information);
+            Logger.Initialize(LogLevel.Debug);
+        }
+        private async Task UserVoiceStateUpdated(SocketUser user, SocketVoiceState vs1, SocketVoiceState vs2)
+        {
+            //Logger.Instance?.LogDebug(vs1.VoiceChannel?.Equals(vs2).ToString());
+
+            //if (vs1.VoiceChannel.ConnectedUsers.Count == 0)
+            //{
+            //    await AudioManager.LeaveAsync(vs1.VoiceChannel.Guild);
+            //}
         }
         private async Task PresenceUpdated(SocketUser user, SocketPresence oldPresence, SocketPresence newPresence)
         {
@@ -93,7 +89,7 @@ namespace TalkingBot
         }
         public async Task Run()
         {
-            await _client.LoginAsync(TokenType.Bot, Token);
+            await _client.LoginAsync(TokenType.Bot, _talbConfig.Token);
             await _client.StartAsync();
 
             while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(100);
@@ -101,9 +97,11 @@ namespace TalkingBot
             foreach(ulong guildid in _talbConfig.Guilds)
             {
                 await _handler.BuildCommands(_client, guildid);
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", $"Commands build successfully for GuildId {guildid}"));
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
+                    $"Commands built successfully for {_client.GetGuild(guildid).Name} ({guildid})"));
             }
-            await _client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+            await _client.SetActivityAsync(
+                new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
             
             try
             {
@@ -118,7 +116,8 @@ namespace TalkingBot
 
             await Task.Delay(-1);
         }
-        private async Task MessageUpdated(Cacheable<IMessage, ulong> before, SocketMessage after, ISocketMessageChannel channel)
+        private async Task MessageUpdated(Cacheable<IMessage, ulong> before, 
+            SocketMessage after, ISocketMessageChannel channel)
         {
             var message = await before.GetOrDownloadAsync();
             Logger.Instance?.LogDebug($"Message update: {message} -> {after}");

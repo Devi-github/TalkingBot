@@ -38,12 +38,17 @@ namespace TalkingBot.Core.Logging
             return enabled;
         }
 
-        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, 
+            Exception? exception, Func<TState, Exception?, string> formatter)
         {
             if (logLevel < _level) return;
             Console.WriteLine($"[{DateTime.Now.ToString("T")}] [{logLevel}]: " + formatter(state, exception));
 
-            if(exception is not null) Console.WriteLine($"[{DateTime.Now.ToString("T")}] [{logLevel}] " +  exception.Message);
+            if (exception is not null)
+            {
+                Console.WriteLine($"[{DateTime.Now.ToString("T")}] [{logLevel}] " + exception.Message);
+                if (_level == LogLevel.Debug) Console.WriteLine($"[{DateTime.Now.ToString("T")}] [{logLevel}] {exception!.InnerException}");
+            }
         }
     }
 }

@@ -78,25 +78,37 @@ namespace TalkingBot.Core.Music
                     Victoria.Responses.Search.SearchType.Direct : 
                     Victoria.Responses.Search.SearchType.YouTube, query);
 
-                if (search.Status == Victoria.Responses.Search.SearchStatus.NoMatches) return new() { message = $"Could not find anything for '{query}'", ephemeral = true };
+                if (search.Status == Victoria.Responses.Search.SearchStatus.NoMatches) 
+                    return new() { message = $"Could not find anything for '{query}'", ephemeral = true };
 
                 track = search.Tracks.FirstOrDefault();
 
-                if(player.Track != null && player.PlayerState is PlayerState.Playing ||  player.PlayerState is PlayerState.Paused)
+                string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
+
+                if (player.Track != null && player.PlayerState is PlayerState.Playing ||  player.PlayerState is PlayerState.Paused)
                 {
                     player.Vueue.Enqueue(track);
 
+                    var enqueuedEmbed = new EmbedBuilder()
+                        .WithTitle($"Enqueued {track.Title}")
+                        .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
+                        .WithColor(0x0A90FA)
+                        .WithThumbnailUrl(thumbnail)
+                        .Build();
+
                     Logger.Instance?.LogInformation("(AUDIO) Track is already playing");
-                    return new() { message = $"{track.Title} has been added to the queue" };
+                    return new() { embed = enqueuedEmbed };
                 }
                 await player.PlayAsync(track);
 
-                await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+                await TalkingBotClient._client.SetActivityAsync(
+                    new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
 
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
                     .WithColor(0x0A90FA)
+                    .WithThumbnailUrl(thumbnail)
                     .Build();
 
                 return new() { embed = embed };
@@ -133,7 +145,8 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                if (player.PlayerState is PlayerState.Stopped || player.PlayerState is PlayerState.None) return new() { message = $"Music is already stopped" };
+                if (player.PlayerState is PlayerState.Stopped || player.PlayerState is PlayerState.None) 
+                    return new() { message = $"Music is already stopped" };
 
                 await player.StopAsync();
                 player.Vueue.Clear();
@@ -156,8 +169,10 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                if (player.PlayerState is PlayerState.Paused) return new() { message = $"Music is already paused", ephemeral = true};
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) return new() { message = $"No songs in queue. Add a song with `/play` command" };
+                if (player.PlayerState is PlayerState.Paused) 
+                    return new() { message = $"Music is already paused", ephemeral = true};
+                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                    return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
                 await player.PauseAsync();
 
@@ -177,12 +192,36 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                if (player.PlayerState is PlayerState.Playing) return new() { message = $"Music is already playing" };
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) return new() { message = $"No songs in queue. Add a song with `/play` command" };
+                if (player.PlayerState is PlayerState.Playing) 
+                    return new() { message = $"Music is already playing" };
+                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                    return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
                 await player.ResumeAsync();
 
                 return new() { message = $"Resumed the music" };
+            }
+            catch (Exception e)
+            {
+                return new() { message = $"Error\n{e.Message}", ephemeral = true };
+            }
+        }
+        public static InteractionResponse RemoveTrack(IGuild guild, int index)
+        {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+
+            try
+            {
+                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
+                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+                if (index - 1 < 0 || index >= player.Vueue.Count) return new() 
+                { 
+                    message = $"Index is not present inside the Queue. Enter values from (1 to {player.Vueue.Count})" 
+                };
+
+                var trackRemoved = player.Vueue.RemoveAt(index - 1);
+
+                return new() { message = $"Removed the track **{trackRemoved.Title}**" };
             }
             catch (Exception e)
             {
@@ -198,15 +237,29 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                if (player.PlayerState is PlayerState.Paused) return new() { message = $"Music is paused. Resume to skip." };
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) return new() { message = $"No songs in queue. Add a song with `/play` command" };
-                if (player.Vueue.Count == 0) return new() { message = $"Only currently playing song is in the queue. You can stop the playback using `/stop` or `/leave`" };
+                if (player.PlayerState is PlayerState.Paused) 
+                    return new() { message = $"Music is paused. Resume to skip." };
+                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                    return new() { message = $"No songs in queue. Add a song with `/play` command" };
+                if (player.Vueue.Count == 0) 
+                    return new() { message = $"Only currently playing song is in the queue. " +
+                        $"You can stop the playback using `/stop` or `/leave`" };
                 
                 await player.SkipAsync();
 
-                await TalkingBotClient._client.SetActivityAsync(new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
+                await TalkingBotClient._client.SetActivityAsync(
+                    new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
+                
+                string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
 
-                return new() { message = $"Skipped a song. Now playing {player.Track}" };
+                var embed = new EmbedBuilder()
+                    .WithTitle($"{player.Track.Title}")
+                    .WithDescription($"Now playing [**{player.Track.Title}**]({player.Track.Url})")
+                    .WithColor(0x0A90FA)
+                    .WithThumbnailUrl(thumbnail)
+                    .Build();
+
+                return new() { embed = embed };
             }
             catch (Exception e)
             {
@@ -222,7 +275,8 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) return new() { message = $"No songs in queue. Add a song with `/play` command" };
+                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                    return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
                 string tracks = "Queue:\n";
 
@@ -235,7 +289,7 @@ namespace TalkingBot.Core.Music
                 int i = 1;
                 foreach(LavaTrack track in player.Vueue)
                 {
-                    embedBuilder.AddField($"{i}", $"[**{track.Title}**]({track.Url})", false);
+                    embedBuilder.AddField($"{i}", $"[**{track.Title}**]({track.Url})", true);
                     i++;
                 }
 
@@ -255,7 +309,7 @@ namespace TalkingBot.Core.Music
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
 
-                volume = volume <= 100 ? (volume >= 0 ? volume : 0) : 100; // This is actually so cryptic, noone would understand that without previous experience
+                volume = volume <= 100 ? (volume >= 0 ? volume : 0) : 100;
 
                 await player.SetVolumeAsync(volume);
 
@@ -301,7 +355,8 @@ namespace TalkingBot.Core.Music
 
             await arg.Player.PlayAsync(track);
 
-            await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 
+                ActivityType.Listening, ActivityProperties.Join, track.Url));
 
             var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")

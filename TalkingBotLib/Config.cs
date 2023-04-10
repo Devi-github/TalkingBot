@@ -29,7 +29,8 @@ namespace TalkingBot
             {
                 await sw.WriteAsync(JsonConvert.SerializeObject(config, Formatting.Indented));
             }
-            Console.WriteLine($"Config successfully created at {cnfpath}. You may edit some parameters there to your liking.");
+            Console.WriteLine($"Config successfully created at {cnfpath}. " +
+                $"You may edit some parameters there to your liking.");
         }
     }
 }

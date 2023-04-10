@@ -93,7 +93,8 @@ namespace TalkingBot.Core
         public async Task HandleCommands(SocketSlashCommand command)
         {
             if (Logger.Instance is null) throw new NullReferenceException("Logger was null when accessed");
-            Logger.Instance?.Log(LogLevel.Debug, $"'{command.CommandName}' was executed by {command.User.Username} at #{command.Channel.Name}");
+            Logger.Instance?.Log(LogLevel.Debug, $"'{command.CommandName}' was " +
+                $"executed by {command.User.Username} at #{command.Channel.Name}");
 
             InternalSlashCommand cmdToExecute = commands.Find(x => x.name == command.CommandName);
 

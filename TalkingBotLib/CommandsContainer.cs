@@ -114,12 +114,29 @@ namespace TalkingBot
                     }
                 }
             });
+            handler.AddCommand(new()
+            {
+                name = "remove",
+                description = "Removes the song at the index specified",
+                Handler = RemoveSong,
+                options = new List<SlashCommandOption>
+                {
+                    new()
+                    {
+                        name = "index",
+                        description = "Song index in queue",
+                        optionType = ApplicationCommandOptionType.Integer,
+                        isRequired = true,
+                    }
+                }
+            });
 
             return handler;
         }
         private static async Task RespondCommandAsync(SocketSlashCommand command, InteractionResponse response)
         {
-            await command.RespondAsync(response.message, isTTS: response.isTts, ephemeral: response.ephemeral, embed: response.embed);
+            await command.RespondAsync(response.message, isTTS: response.isTts, 
+                ephemeral: response.ephemeral, embed: response.embed);
         }
         private static async Task Volume(SocketSlashCommand command)
         {
@@ -131,7 +148,8 @@ namespace TalkingBot
         private static async Task JoinChannel(SocketSlashCommand command)
         {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, await AudioManager.JoinAsync(guild, command.User as IVoiceState, command.Channel as ITextChannel));
+            await RespondCommandAsync(command, await AudioManager.JoinAsync(guild, command.User as IVoiceState, 
+                command.Channel as ITextChannel));
         }
         private static async Task Play(SocketSlashCommand command)
         {
@@ -139,6 +157,12 @@ namespace TalkingBot
             string query = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
             await RespondCommandAsync(command, await AudioManager.PlayAsync(command.User as SocketGuildUser, 
                 command.Channel as ITextChannel, guild, query));
+        }
+        private static async Task RemoveSong(SocketSlashCommand command)
+        {
+            long index = (long)command.Data.Options.ToList()[0].Value;
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, AudioManager.RemoveTrack(guild, Convert.ToInt32(index)));
         }
         private static async Task Leave(SocketSlashCommand command)
         {
@@ -166,7 +190,8 @@ namespace TalkingBot
             if(command.Data.Options.Count != 0)
                 limit = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
 
-            await RespondCommandAsync(command, new() { message = $"**{RandomStatic.NextInt64(limit) + 1}**/{limit}" });
+            await RespondCommandAsync(command, new() { message = 
+                $"**{(RandomStatic.NextInt64(limit) + 1).ToString("N0")}**/{limit.ToString("N0")}" });
         }
         private static async Task Skip(SocketSlashCommand command)
         {
