@@ -246,6 +246,26 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
+        public static async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
+        {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+
+            try
+            {
+                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
+                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+
+                volume = volume <= 100 ? (volume >= 0 ? volume : 0) : 100; // This is actually so cryptic, noone would understand that without previous experience
+
+                await player.SetVolumeAsync(volume);
+
+                return new() { message = $"Changed volume to **{volume}**/100" };
+            }
+            catch (Exception e)
+            {
+                return new() { message = $"Error\n{e.Message}", ephemeral = true };
+            }
+        }
         private static Task OnTrackExceptionAsync(TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
             arg.Player.Vueue.Enqueue(arg.Track);

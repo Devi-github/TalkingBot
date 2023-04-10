@@ -98,12 +98,35 @@ namespace TalkingBot
                 description = "Displays current queue",
                 Handler = Queue
             });
+            handler.AddCommand(new()
+            {
+                name = "volume",
+                description = "Changes the current volume of a player",
+                Handler = Volume,
+                options = new List<SlashCommandOption>
+                {
+                    new()
+                    {
+                        name = "volume",
+                        description = "Specified volume from 0 to 100",
+                        optionType = ApplicationCommandOptionType.Integer,
+                        isRequired = true,
+                    }
+                }
+            });
 
             return handler;
         }
         private static async Task RespondCommandAsync(SocketSlashCommand command, InteractionResponse response)
         {
             await command.RespondAsync(response.message, isTTS: response.isTts, ephemeral: response.ephemeral, embed: response.embed);
+        }
+        private static async Task Volume(SocketSlashCommand command)
+        {
+            long volume = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+
+            await RespondCommandAsync(command, await AudioManager.ChangeVolume(guild, (int)volume));
         }
         private static async Task JoinChannel(SocketSlashCommand command)
         {
