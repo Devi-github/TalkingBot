@@ -98,7 +98,7 @@ namespace TalkingBot
             {
                 await _handler.BuildCommands(_client, guildid);
                 await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
-                    $"Commands built successfully for {_client.GetGuild(guildid).Name} ({guildid})"));
+                    $"Commands ({_handler.GetLength()} in total) built successfully for {_client.GetGuild(guildid).Name} ({guildid})"));
             }
             await _client.SetActivityAsync(
                 new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));

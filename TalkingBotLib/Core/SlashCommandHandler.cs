@@ -59,6 +59,8 @@ namespace TalkingBot.Core
             commandHandlers.Add(command.Handler);
             return this;
         }
+        public int GetLength()
+            => commands.Count;
         public async Task BuildCommands(DiscordSocketClient client, ulong guildId)
         {
             var guild = client.GetGuild(guildId);

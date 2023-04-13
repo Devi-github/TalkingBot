@@ -150,6 +150,11 @@ namespace TalkingBot
                     }
                 }
             });
+            handler.AddCommand(new() {
+                name = "length",
+                description = "Gets length of a current track",
+                Handler = GetLen
+            });
 
             return handler;
         }
@@ -157,6 +162,10 @@ namespace TalkingBot
         {
             await command.RespondAsync(response.message, isTTS: response.isTts, 
                 ephemeral: response.ephemeral, embed: response.embed);
+        }
+        private static async Task GetLen(SocketSlashCommand command) {
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, AudioManager.GetLength(guild));
         }
         private static async Task GotoFunc(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);

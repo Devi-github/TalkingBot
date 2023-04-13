@@ -331,6 +331,29 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
+        public static InteractionResponse GetLength(IGuild guild) {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+
+            try
+            {
+                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
+                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+
+                if(player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped)
+                    return new() {
+                        message = "Cannot display length of a track if it doesn't exist!",
+                        ephemeral = true
+                    };
+                string durstr = player.Track.Duration.ToString("c");
+                return new() {
+                    message = $"Duration: {durstr}"
+                };
+            }
+            catch (Exception e)
+            {
+                return new() { message = $"Error\n{e.Message}", ephemeral = true };
+            }
+        }
         public static async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
         {
             if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
@@ -383,7 +406,7 @@ namespace TalkingBot.Core.Music
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
                 return;
             }
-            
+
             await arg.Player.PlayAsync(track);
 
             await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 
