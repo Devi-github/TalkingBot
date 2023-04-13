@@ -56,7 +56,7 @@ namespace TalkingBot.Core.Music
             }
         }
         public static async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
             try
             {
                 var success = _lavaNode.TryGetPlayer(guild, out var player);
@@ -150,7 +150,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> LeaveAsync(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
             try
             {
                 var success = _lavaNode.TryGetPlayer(guild, out var player);
@@ -169,7 +169,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> StopAsync(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -193,7 +193,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> PauseAsync(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -216,7 +216,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> ResumeAsync(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -239,7 +239,7 @@ namespace TalkingBot.Core.Music
         }
         public static InteractionResponse RemoveTrack(IGuild guild, int index)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -261,7 +261,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> SkipAsync(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -299,7 +299,7 @@ namespace TalkingBot.Core.Music
         }
         public static InteractionResponse GetQueue(IGuild guild)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -332,7 +332,7 @@ namespace TalkingBot.Core.Music
             }
         }
         public static InteractionResponse GetLength(IGuild guild) {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
@@ -356,7 +356,7 @@ namespace TalkingBot.Core.Music
         }
         public static async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
         {
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!" };
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
             try
             {
