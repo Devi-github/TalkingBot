@@ -37,6 +37,9 @@ namespace TalkingBot.Core.Music
             _lavaNode.OnTrackException += OnTrackExceptionAsync;
             _lavaNode.OnTrackEnd += TrackEnded;
         }
+
+        private static bool isOnLoop = false;
+        private static int loopRemaining = 0;
         public static async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState, ITextChannel channel)
         {
             if(_lavaNode.HasPlayer(guild))
@@ -52,7 +55,31 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
-        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, ITextChannel channel, IGuild guild, string query, double seconds=0)
+        public static async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!" };
+            try
+            {
+                var success = _lavaNode.TryGetPlayer(guild, out var player);
+                if (!success) throw new Exception("Player get failed. Probably not connected");
+                if(player.PlayerState is not PlayerState.Playing) 
+                    return new() {
+                        message = "Bot is not playing! To go to a timestamp you have to have a song playing!",
+                        ephemeral = true
+                    };
+                TimeSpan timecode = TimeSpan.FromSeconds(seconds);
+                if(player.Track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
+                await player.SeekAsync(timecode);
+
+                return new() {
+                    message = $"Skipped to {seconds} seconds"
+                };
+            } catch(Exception e)
+            {
+                return new() { message = $"Error\n{e}", ephemeral = true };
+            }
+        }
+        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, 
+            ITextChannel channel, IGuild guild, string query, double seconds=0)
         {
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
 
@@ -100,6 +127,8 @@ namespace TalkingBot.Core.Music
                     return new() { embed = enqueuedEmbed };
                 }
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
+                if(track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
+
                 await player.PlayAsync(track);
                 await player.SeekAsync(timecode);
 
@@ -354,7 +383,7 @@ namespace TalkingBot.Core.Music
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
                 return;
             }
-
+            
             await arg.Player.PlayAsync(track);
 
             await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 

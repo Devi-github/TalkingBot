@@ -136,6 +136,20 @@ namespace TalkingBot
                     }
                 }
             });
+            handler.AddCommand(new() {
+                name = "goto",
+                description = "Goes to a specific timecode in a song",
+                Handler = GotoFunc,
+                options = new List<SlashCommandOption>
+                {
+                    new() {
+                        name = "timecode",
+                        description = "Timecode to go to",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = true
+                    }
+                }
+            });
 
             return handler;
         }
@@ -143,6 +157,16 @@ namespace TalkingBot
         {
             await command.RespondAsync(response.message, isTTS: response.isTts, 
                 ephemeral: response.ephemeral, embed: response.embed);
+        }
+        private static async Task GotoFunc(SocketSlashCommand command) {
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            string timecodeStr = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out double seconds);
+            if(!success) {
+                await RespondCommandAsync(command, new() {message = "Failed to parse timecode! Format for the timecode is: 0:00", ephemeral = true});
+                return;
+            }
+            await RespondCommandAsync(command, await AudioManager.GoToAsync(guild, seconds));
         }
         private static async Task Volume(SocketSlashCommand command)
         {
