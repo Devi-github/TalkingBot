@@ -52,7 +52,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
-        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, ITextChannel channel, IGuild guild, string query)
+        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, ITextChannel channel, IGuild guild, string query, double seconds=0)
         {
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
 
@@ -71,7 +71,7 @@ namespace TalkingBot.Core.Music
             {
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
+                
                 LavaTrack track;
 
                 var search = await _lavaNode.SearchAsync(Uri.IsWellFormedUriString(query, UriKind.Absolute) ? 
@@ -99,7 +99,9 @@ namespace TalkingBot.Core.Music
                     Logger.Instance?.LogInformation("(AUDIO) Track is already playing");
                     return new() { embed = enqueuedEmbed };
                 }
+                TimeSpan timecode = TimeSpan.FromSeconds(seconds);
                 await player.PlayAsync(track);
+                await player.SeekAsync(timecode);
 
                 await TalkingBotClient._client.SetActivityAsync(
                     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));

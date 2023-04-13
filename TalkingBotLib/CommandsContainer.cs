@@ -35,6 +35,12 @@ namespace TalkingBot
                         description = "Query or URL to find music by",
                         optionType = ApplicationCommandOptionType.String,
                         isRequired = true
+                    },
+                    new() {
+                        name = "timecode",
+                        description = "Timecode to start the song at (default: 0:00)",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
                     }
                 }
             });
@@ -151,12 +157,22 @@ namespace TalkingBot
             await RespondCommandAsync(command, await AudioManager.JoinAsync(guild, command.User as IVoiceState, 
                 command.Channel as ITextChannel));
         }
+
         private static async Task Play(SocketSlashCommand command)
         {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             string query = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            double secs = 0;
+            if(command.Data.Options.ToList().Count == 2) {
+                string timecodeStr = (string)command.Data.Options.ToList()[1].Value; // TODO: FIXME: this is bad. need to change it
+                bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out secs);
+                if(!success) {
+                    await RespondCommandAsync(command, new() {message = "Failed to parse timecode! Format for the timecode is: 0:00", ephemeral = true});
+                    return;
+                }
+            }
             await RespondCommandAsync(command, await AudioManager.PlayAsync(command.User as SocketGuildUser, 
-                command.Channel as ITextChannel, guild, query));
+                command.Channel as ITextChannel, guild, query, secs));
         }
         private static async Task RemoveSong(SocketSlashCommand command)
         {
