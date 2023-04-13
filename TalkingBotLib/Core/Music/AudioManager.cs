@@ -71,7 +71,7 @@ namespace TalkingBot.Core.Music
                 await player.SeekAsync(timecode);
 
                 return new() {
-                    message = $"Skipped to {seconds} seconds"
+                    message = $"Skipped to {timecode.ToString("c")}"
                 };
             } catch(Exception e)
             {
@@ -112,6 +112,8 @@ namespace TalkingBot.Core.Music
 
                 string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
 
+                var durstr = track.Duration.ToString("c");
+
                 if (player.Track != null && player.PlayerState is PlayerState.Playing ||  player.PlayerState is PlayerState.Paused)
                 {
                     player.Vueue.Enqueue(track);
@@ -121,6 +123,9 @@ namespace TalkingBot.Core.Music
                         .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
                         .WithColor(0x0A90FA)
                         .WithThumbnailUrl(thumbnail)
+                        .AddField("Duration", durstr, true)
+                        .AddField("Requested by", user.Mention, true)
+                        .AddField("Video author", track.Author)
                         .Build();
 
                     Logger.Instance?.LogInformation("(AUDIO) Track is already playing");
@@ -134,12 +139,15 @@ namespace TalkingBot.Core.Music
 
                 await TalkingBotClient._client.SetActivityAsync(
                     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
-
+                
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
                     .WithColor(0x0A90FA)
                     .WithThumbnailUrl(thumbnail)
+                    .AddField("Duration", durstr, true)
+                    .AddField("Requested by", user.Mention, true)
+                    .AddField("Video author", track.Author)
                     .Build();
 
                 return new() { embed = embed };
@@ -288,6 +296,8 @@ namespace TalkingBot.Core.Music
                     .WithDescription($"Now playing [**{player.Track.Title}**]({player.Track.Url})")
                     .WithColor(0x0A90FA)
                     .WithThumbnailUrl(thumbnail)
+                    .AddField("Duration", player.Track.Duration.ToString("c"), true)
+                    .AddField("Video author", player.Track.Author)
                     .Build();
 
                 return new() { embed = embed };
@@ -397,16 +407,22 @@ namespace TalkingBot.Core.Music
         }
         public static async Task TrackEnded(TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
-            if (arg.Reason != TrackEndReason.Finished)
+            Logger.Instance?.LogDebug("Track ended!");
+            if (arg.Reason != TrackEndReason.Finished) {
+                Logger.Instance?.LogDebug("Queue finished!");
                 return;
-            if (!arg.Player.Vueue.TryDequeue(out var queueable))
+            }
+            if (!arg.Player.Vueue.TryDequeue(out var queueable)) {
+                Logger.Instance?.LogDebug("Dequeue was not successful, i guess!");
                 return;
+            }
             if (!(queueable is LavaTrack track))
             {
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
                 return;
             }
 
+            Logger.Instance?.LogDebug("Trying to play a new track!");
             await arg.Player.PlayAsync(track);
 
             await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 
