@@ -12,7 +12,6 @@ namespace TalkingBot
     {
         public static async Task CreateDefaultConfig(string cnfpath)
         {
-            TalkingBotConfig config = new();
 
             Console.WriteLine("Generating essential config...");
             Console.Write("Enter application token: ");
@@ -22,8 +21,11 @@ namespace TalkingBot
                 Console.Error.WriteLine("Token is not specified!");
                 Environment.Exit(-1);
             }
-            config.Token = token;
-            config.Guilds = new ulong[] { };
+            TalkingBotConfig config = new() {
+                Token = token,
+                Guilds = new ulong[] {},
+                ForceUpdateCommands = false
+            };
 
             using (StreamWriter sw = new(cnfpath))
             {

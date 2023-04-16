@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using TalkingBot.Core.Logging;
 
 namespace TalkingBot.Core
@@ -61,16 +62,26 @@ namespace TalkingBot.Core
         }
         public int GetLength()
             => commands.Count;
-        public async Task BuildCommands(DiscordSocketClient client, ulong guildId)
+        public async Task BuildCommands(DiscordSocketClient client, ulong guildId, bool forceUpdateCommands=false)
         {
             var guild = client.GetGuild(guildId);
+            var rest = client.Rest;
+            var existingCommands = await rest.GetGuildApplicationCommands(guildId);
 
+            Stopwatch sw = new();
             foreach(var command in commands)
             {
+                if(!forceUpdateCommands && 
+                    existingCommands.ToList().Find(x => x.Name == command.name) is not null) {
+                    Logger.Instance?.LogDebug($"Skipped '{command.name}' because it already exists in {guild.Name} ({guild.Id})");
+                    continue;
+                }
+                sw.Restart();
+                
                 var guildCommand = new SlashCommandBuilder()
                     .WithName(command.name)
                     .WithDescription(command.description);
-
+                
                 if (command.options is not null)
                 {
                     foreach (var option in command.options)
@@ -83,7 +94,10 @@ namespace TalkingBot.Core
                 }
                 try
                 {
-                    await guild.CreateApplicationCommandAsync(guildCommand.Build());
+                    await rest.CreateGuildCommand(guildCommand.Build(), guildId);
+                    sw.Stop();
+                    Logger.Instance?.LogDebug($"Command '{guildCommand.Name}' built in {sw.Elapsed.TotalSeconds}s for " + 
+                    $"{guild.Name} ({guild.Id})");
                 }
                 catch (HttpException e)
                 {

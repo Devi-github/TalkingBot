@@ -13,5 +13,7 @@ namespace TalkingBot.Core
         public string Token { get; set; }
         [JsonProperty("guilds")]
         public ulong[] Guilds { get; set; }
+        [JsonProperty("forceUpdateCommands")]
+        public bool ForceUpdateCommands { get; set; }
     }
 }

@@ -29,11 +29,10 @@ namespace TalkingBot
         private static DiscordSocketConfig _config;
         private static TalkingBotConfig _talbConfig;
         private SlashCommandHandler _handler;
-
+        private AudioManager _amanager;
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
             _talbConfig = tbConfig;
-
             _config = new DiscordSocketConfig() {
                 MessageCacheSize = 100,
                 UseInteractionSnowflakeDate = true,
@@ -57,16 +56,18 @@ namespace TalkingBot
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
 
-            _lavaNode = new(_client, new()
+            NodeConfiguration lavaConfig = new()
             {
                 Hostname = "localhost",
                 Port = 2333,
                 Authorization = "youshallnotpass",
                 SelfDeaf = false,
                 IsSecure = false,
-                SocketConfiguration = new() { ReconnectAttempts = 3, BufferSize = 2048, 
-                    ReconnectDelay = TimeSpan.FromSeconds(5) }
-            }, logger);
+                SocketConfiguration = new() { ReconnectAttempts = 3, ReconnectDelay = TimeSpan.FromSeconds(5) }
+            };
+            _lavaNode = new(_client, lavaConfig, logger);
+
+            _amanager = new AudioManager(_lavaNode);
 
             _client.PresenceUpdated += PresenceUpdated;
 
@@ -92,13 +93,18 @@ namespace TalkingBot
             await _client.LoginAsync(TokenType.Bot, _talbConfig.Token);
             await _client.StartAsync();
 
+            Stopwatch sw = new();
+
             while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(100);
 
             foreach(ulong guildid in _talbConfig.Guilds)
             {
+                sw.Restart();
                 await _handler.BuildCommands(_client, guildid);
+                sw.Stop();
                 await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
-                    $"Commands ({_handler.GetLength()} in total) built successfully for {_client.GetGuild(guildid).Name} ({guildid})"));
+                    $"Commands ({_handler.GetLength()} in total) built successfully for {_client.GetGuild(guildid).Name} ({guildid}) in "+
+                    $"{sw.Elapsed.TotalSeconds}s."));
             }
             await _client.SetActivityAsync(
                 new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));

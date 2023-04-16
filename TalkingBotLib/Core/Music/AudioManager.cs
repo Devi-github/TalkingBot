@@ -22,20 +22,23 @@ namespace TalkingBot.Core.Music
     public class AudioManager
     {
         private static LavaNode _lavaNode;
-        private static readonly ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
-        public static readonly HashSet<ulong> VoteQueue;
-        static AudioManager() 
+        private static ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
+        public static HashSet<ulong> VoteQueue;
+        public AudioManager(LavaNode lavaNode) 
         { 
-            _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
+            _lavaNode = lavaNode;
 
+            _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
+            
             VoteQueue = new HashSet<ulong>();
 
-            _lavaNode = TalkingBotClient._lavaNode;
+            _lavaNode.OnTrackEnd += OnTrackEndAsync;
+            _lavaNode.OnTrackStart += OnTrackStartAsync;
             _lavaNode.OnStatsReceived += OnStatsReceivedAsync;
             _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
             _lavaNode.OnTrackStuck += OnTrackStuckAsync;
             _lavaNode.OnTrackException += OnTrackExceptionAsync;
-            _lavaNode.OnTrackEnd += TrackEnded;
+            _lavaNode.OnUpdateReceived += OnUpdateReceivedAsync;
         }
 
         private static bool isOnLoop = false;
@@ -128,7 +131,6 @@ namespace TalkingBot.Core.Music
                         .AddField("Video author", track.Author)
                         .Build();
 
-                    Logger.Instance?.LogInformation("(AUDIO) Track is already playing");
                     return new() { embed = enqueuedEmbed };
                 }
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
@@ -168,7 +170,6 @@ namespace TalkingBot.Core.Music
 
                 await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
-                Logger.Instance?.LogInformation($"(AUDIO) Bot left the channel");
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
             {
@@ -384,15 +385,15 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        private static Task OnTrackExceptionAsync(TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        private static async Task OnTrackExceptionAsync(TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
             arg.Player.Vueue.Enqueue(arg.Track);
-            return arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it threw an exception.");
+            await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it threw an exception.");
         }
-        private static Task OnTrackStuckAsync(TrackStuckEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        private static async Task OnTrackStuckAsync(TrackStuckEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
             arg.Player.Vueue.Enqueue(arg.Track);
-            return arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it got stuck.");
+            await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it got stuck.");
         }
         private static Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
         {
@@ -401,11 +402,18 @@ namespace TalkingBot.Core.Music
         }
         private static Task OnStatsReceivedAsync(StatsEventArg arg)
         {
-            
-            Logger.Instance?.LogDebug(JsonConvert.SerializeObject(arg));
+
             return Task.CompletedTask;
         }
-        public static async Task TrackEnded(TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        public static Task OnUpdateReceivedAsync(UpdateEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg) {
+
+            return Task.CompletedTask;
+        }
+        public static Task OnTrackStartAsync(TrackStartEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg) {
+            
+            return Task.CompletedTask;
+        }
+        public static async Task OnTrackEndAsync(TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
             Logger.Instance?.LogDebug("Track ended!");
             if (arg.Reason != TrackEndReason.Finished) {

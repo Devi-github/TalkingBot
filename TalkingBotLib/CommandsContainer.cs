@@ -151,7 +151,7 @@ namespace TalkingBot
                 }
             });
             handler.AddCommand(new() {
-                name = "length",
+                name = "trlen",
                 description = "Gets length of a current track",
                 Handler = GetLen
             });

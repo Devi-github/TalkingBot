@@ -2,14 +2,14 @@ namespace TalkingBot.Utils {
     public static class AdditionalUtils {
         public static bool TryParseTimecode(string timecode, out double result) {
             result = 0;
+            bool success = true;
+            double mins = 0, secs = 0;
             string[] parts = timecode.Split(':');
             if(parts.Length != 2) return false;
-            try {
-                result = double.Parse(parts[0]) * 60 + double.Parse(parts[1]);
-            } catch(Exception e) {
-                return false;
-            }
-            return true;
+            success = success && double.TryParse(parts[0], out mins);
+            success = success && double.TryParse(parts[1], out secs);
+            result = mins * 60 + secs;
+            return success;
         }
     }
 }

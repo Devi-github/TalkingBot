@@ -13,6 +13,11 @@ namespace TalkingBot.Core.Logging
 
         private LogLevel _level;
         private bool enabled;
+
+        public string[] colorCodes = new string[7] {
+            "\033[39m", "\033[37m", "\033[39m", "\033[93m", 
+            "\033[91m", "\033[31m", "\033[39m"
+        };
         public Logger(LogLevel logLevel = LogLevel.Debug)
         {
             _level = logLevel;
