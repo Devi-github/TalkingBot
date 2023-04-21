@@ -24,9 +24,9 @@ namespace TalkingBot.Core.Music
         private static LavaNode _lavaNode;
         private static ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
         public static HashSet<ulong> VoteQueue;
-        public AudioManager(LavaNode lavaNode) 
+        static AudioManager() 
         { 
-            _lavaNode = lavaNode;
+            _lavaNode = ServiceManager.ServiceProvider.GetRequiredService<LavaNode>();
 
             _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
             
@@ -69,6 +69,11 @@ namespace TalkingBot.Core.Music
                         message = "Bot is not playing! To go to a timestamp you have to have a song playing!",
                         ephemeral = true
                     };
+                if(!player.Track.CanSeek) return new() {
+                    message = "Cannot go to any position on this track!",
+                    ephemeral = true
+                };
+
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
                 if(player.Track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
                 await player.SeekAsync(timecode);
@@ -246,7 +251,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static InteractionResponse RemoveTrack(IGuild guild, int index)
+        public static InteractionResponse RemoveTrack(IGuild guild, long index)
         {
             if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
 
@@ -254,12 +259,13 @@ namespace TalkingBot.Core.Music
             {
                 var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
                 if (!success) throw new Exception("Player get failed. Idk what is the problem");
-                if (index - 1 < 0 || index >= player.Vueue.Count) return new() 
+                if (index - 1 < 0 || index > player.Vueue.Count) return new() 
                 { 
-                    message = $"Index is not present inside the Queue. Enter values from (1 to {player.Vueue.Count})" 
+                    message = $"Index is not present inside the Queue. Enter values from (1 to {player.Vueue.Count})",
+                    ephemeral = true 
                 };
 
-                var trackRemoved = player.Vueue.RemoveAt(index - 1);
+                var trackRemoved = player.Vueue.RemoveAt((int)(index - 1));
 
                 return new() { message = $"Removed the track **{trackRemoved.Title}**" };
             }
@@ -308,6 +314,24 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
+        public static InteractionResponse GetCurrentPosition(IGuild guild) {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+
+            try {
+                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
+                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+
+                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                    return new() { message = $"No songs in queue. Add a song with `/play` command" };
+
+                string curpos = $"{player.Track.Position.Hours.ToString("00")}:"+
+                $"{player.Track.Position.Minutes.ToString("00")}:{player.Track.Position.Seconds.ToString("00")}";
+
+                return new() { message = $"Current track position: **{curpos}**/{player.Track.Duration.ToString("c")}", ephemeral = true };
+            } catch(Exception ex) {
+                return new() { message = $"Error\n{ex.Message}", ephemeral = true };
+            }
+        }
         public static InteractionResponse GetQueue(IGuild guild)
         {
             if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
@@ -319,8 +343,6 @@ namespace TalkingBot.Core.Music
 
                 if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
-
-                string tracks = "Queue:\n";
 
                 var embedBuilder = new EmbedBuilder()
                     .WithTitle("Queue")
@@ -436,10 +458,16 @@ namespace TalkingBot.Core.Music
             await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 
                 ActivityType.Listening, ActivityProperties.Join, track.Url));
 
+            string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
+            var durstr = track.Duration.ToString("c");
+
             var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
-                    .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
+                    .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
                     .WithColor(0x0A90FA)
+                    .WithThumbnailUrl(thumbnail)
+                    .AddField("Duration", durstr, true)
+                    .AddField("Video author", track.Author)
                     .Build();
             await arg.Player.TextChannel.SendMessageAsync(embed: embed);
         }

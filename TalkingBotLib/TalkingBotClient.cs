@@ -24,12 +24,17 @@ namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
+        public const int Branch = 1;
+        public const int Commit = 3;
+        public const int Tweak = 0;
+        public const bool IsBuilt = false;
+
         public static LavaNode _lavaNode;
         public static DiscordSocketClient _client;
         private static DiscordSocketConfig _config;
         private static TalkingBotConfig _talbConfig;
-        private SlashCommandHandler _handler;
-        private AudioManager _amanager;
+        private static SlashCommandHandler _handler;
+
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
             _talbConfig = tbConfig;
@@ -37,6 +42,7 @@ namespace TalkingBot
                 MessageCacheSize = 100,
                 UseInteractionSnowflakeDate = true,
                 AlwaysDownloadUsers = true,
+                GatewayIntents = GatewayIntents.AllUnprivileged
             };
             if (clientConfig != null) _config = clientConfig;
 
@@ -46,7 +52,7 @@ namespace TalkingBot
             _client.Log += Log;
 
             _client.MessageUpdated += MessageUpdated;
-            _client.UserVoiceStateUpdated += UserVoiceStateUpdated;
+
             _client.Ready += async () =>
             {
                 await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
@@ -55,38 +61,42 @@ namespace TalkingBot
             _client.SlashCommandExecuted += _handler.HandleCommands;
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
-
-            NodeConfiguration lavaConfig = new()
-            {
+            
+            _lavaNode = new(_client, new(){
                 Hostname = "localhost",
                 Port = 2333,
                 Authorization = "youshallnotpass",
                 SelfDeaf = false,
-                IsSecure = false,
-                SocketConfiguration = new() { ReconnectAttempts = 3, ReconnectDelay = TimeSpan.FromSeconds(5) }
-            };
-            _lavaNode = new(_client, lavaConfig, logger);
+                SocketConfiguration = new() {
+                    ReconnectAttempts = 3, 
+                    ReconnectDelay = TimeSpan.FromSeconds(5), 
+                    BufferSize = 1024
+                },
+                IsSecure = false
+            }, logger);
 
-            _amanager = new AudioManager(_lavaNode);
-
-            _client.PresenceUpdated += PresenceUpdated;
+            ServiceCollection collection = new();
+            collection.AddSingleton(_client);
+            collection.AddSingleton<AudioManager>();
+            collection.AddSingleton(_handler);
+            collection.AddSingleton(_lavaNode);
+            //collection.AddLavaNode(conf => {
+            //    conf.Hostname = "localhost";
+            //    conf.Port = 2333;
+            //    conf.Authorization = "youshallnotpass";
+            //    conf.SelfDeaf = false;
+            //    conf.SocketConfiguration = new() {
+            //        ReconnectAttempts = 3, 
+            //        ReconnectDelay = TimeSpan.FromSeconds(5), 
+            //        BufferSize = 1024
+            //    };
+            //});
+            collection.AddSingleton(logger);
+            ServiceManager.SetProvider(collection);
 
             RandomStatic.Initialize();
 
             Logger.Initialize(LogLevel.Debug);
-        }
-        private async Task UserVoiceStateUpdated(SocketUser user, SocketVoiceState vs1, SocketVoiceState vs2)
-        {
-            //Logger.Instance?.LogDebug(vs1.VoiceChannel?.Equals(vs2).ToString());
-
-            //if (vs1.VoiceChannel.ConnectedUsers.Count == 0)
-            //{
-            //    await AudioManager.LeaveAsync(vs1.VoiceChannel.Guild);
-            //}
-        }
-        private async Task PresenceUpdated(SocketUser user, SocketPresence oldPresence, SocketPresence newPresence)
-        {
-
         }
         public async Task Run()
         {
@@ -95,7 +105,7 @@ namespace TalkingBot
 
             Stopwatch sw = new();
 
-            while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(100);
+            while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(10);
 
             foreach(ulong guildid in _talbConfig.Guilds)
             {
@@ -111,14 +121,13 @@ namespace TalkingBot
             
             try
             {
-                await _lavaNode.ConnectAsync();
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connecting..."));
+                await VictoriaExtensions.UseLavaNodeAsync(ServiceManager.ServiceProvider);
+                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connected"));
             }
             catch (Exception ex)
             {
                 await Log(new(LogSeverity.Critical, "TalkingBotClient.Run()", "Lavalink connection failed!", ex));
             }
-            await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connected"));
 
             await Task.Delay(-1);
         }
