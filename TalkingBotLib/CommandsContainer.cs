@@ -155,6 +155,20 @@ namespace TalkingBot
                 description = "Gets length of a current track",
                 Handler = GetLen
             });
+            handler.AddCommand(new() {
+                name = "position",
+                description = "Gets current position of a playing track",
+                Handler = GetPosition
+            });
+            handler.AddCommand(new() {
+                name = "version",
+                description = "Gets current version of a bot",
+                Handler = async (SocketSlashCommand cmd) => {
+                    await RespondCommandAsync(cmd, new() {
+                        message = AdditionalUtils.GetVersion()
+                    });
+                }
+            });
 
             return handler;
         }
@@ -211,7 +225,7 @@ namespace TalkingBot
         {
             long index = (long)command.Data.Options.ToList()[0].Value;
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, AudioManager.RemoveTrack(guild, Convert.ToInt32(index)));
+            await RespondCommandAsync(command, AudioManager.RemoveTrack(guild, index));
         }
         private static async Task Leave(SocketSlashCommand command)
         {
@@ -251,6 +265,10 @@ namespace TalkingBot
         {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, AudioManager.GetQueue(guild));
+        }
+        private static async Task GetPosition(SocketSlashCommand command) {
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, AudioManager.GetCurrentPosition(guild));
         }
     }
 }

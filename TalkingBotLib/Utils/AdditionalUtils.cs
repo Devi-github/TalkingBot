@@ -11,5 +11,13 @@ namespace TalkingBot.Utils {
             result = mins * 60 + secs;
             return success;
         }
+        public static string GetVersion() {
+            int branch = TalkingBot.TalkingBotClient.Branch;
+            int commit = TalkingBot.TalkingBotClient.Commit;
+            int tweak = TalkingBot.TalkingBotClient.Tweak;
+            string built = TalkingBot.TalkingBotClient.IsBuilt ? "" : "-prebuild";
+
+            return $"{branch}.{commit}.{tweak}{built}";
+        }
     }
 }
