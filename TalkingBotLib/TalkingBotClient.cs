@@ -24,9 +24,9 @@ namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
-        public const int Branch = 1;
-        public const int Commit = 3;
-        public const int Tweak = 0;
+        public const int Branch = 2;
+        public const int Commit = 1;
+        public const int Tweak = 3;
         public const bool IsBuilt = false;
 
         public static LavaNode _lavaNode;
@@ -42,7 +42,7 @@ namespace TalkingBot
                 MessageCacheSize = 100,
                 UseInteractionSnowflakeDate = true,
                 AlwaysDownloadUsers = true,
-                GatewayIntents = GatewayIntents.AllUnprivileged
+                GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildPresences
             };
             if (clientConfig != null) _config = clientConfig;
 
@@ -58,6 +58,7 @@ namespace TalkingBot
                 await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
                     $"Logged in as {_client.CurrentUser.Username}!"));
             };
+            _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _handler.HandleCommands;
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
@@ -98,6 +99,24 @@ namespace TalkingBot
 
             Logger.Initialize(LogLevel.Debug);
         }
+        
+        public async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
+            if(user is not SocketGuildUser guildUser) return;
+
+            SocketVoiceChannel channel = prevVs.VoiceChannel;
+
+            if(channel != null && channel.Id != newVs.VoiceChannel.Id) {
+                var clientUser = channel.GetUser(_client.CurrentUser.Id);
+                if(clientUser != null) {
+                    IGuildUser bot = clientUser as IGuildUser;
+                    var users = channel.ConnectedUsers;
+                    if(bot.VoiceChannel != null && bot.VoiceChannel.Id == channel.Id && users.Count == 1) {
+                        await bot.VoiceChannel!.DisconnectAsync();
+                    }
+                }
+            }
+        }
+
         public async Task Run()
         {
             await _client.LoginAsync(TokenType.Bot, _talbConfig.Token);

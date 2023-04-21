@@ -440,15 +440,18 @@ namespace TalkingBot.Core.Music
             Logger.Instance?.LogDebug("Track ended!");
             if (arg.Reason != TrackEndReason.Finished) {
                 Logger.Instance?.LogDebug("Queue finished!");
+                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if (!arg.Player.Vueue.TryDequeue(out var queueable)) {
                 Logger.Instance?.LogDebug("Dequeue was not successful, i guess!");
+                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if (!(queueable is LavaTrack track))
             {
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
+                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
 
