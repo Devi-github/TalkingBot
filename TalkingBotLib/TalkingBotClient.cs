@@ -25,7 +25,7 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int Branch = 1;
-        public const int Commit = 2;
+        public const int Commit = 3;
         public const int Tweak = 0;
         public const bool IsBuilt = false;
 
