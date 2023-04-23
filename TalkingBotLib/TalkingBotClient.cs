@@ -24,13 +24,13 @@ namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
-        public const int Branch = 1;
-        public const int Commit = 3;
-        public const int Tweak = 0;
+        public const int Branch = 2;
+        public const int Commit = 1;
+        public const int Tweak = 3;
         public const bool IsBuilt = false;
 
         public static LavaNode _lavaNode;
-        public static DiscordSocketClient _client;
+        public static DiscordShardedClient _client;
         private static DiscordSocketConfig _config;
         private static TalkingBotConfig _talbConfig;
         private static SlashCommandHandler _handler;
@@ -42,26 +42,42 @@ namespace TalkingBot
                 MessageCacheSize = 100,
                 UseInteractionSnowflakeDate = true,
                 AlwaysDownloadUsers = true,
-                GatewayIntents = GatewayIntents.AllUnprivileged
+                TotalShards = _talbConfig.Guilds.Length,
+                GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildPresences
             };
             if (clientConfig != null) _config = clientConfig;
 
             _handler = CommandsContainer.BuildHandler();
 
             _client = new(_config);
+
+            SetEvents();
+            
+
+            SetServices();
+
+            Logger.Initialize(LogLevel.Debug);
+        }
+        private async Task ShardReady(DiscordSocketClient shard) {
+            await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
+                $"Logged in as a shard {shard.CurrentUser.Username}!"));
+        }
+        private void SetEvents() {
             _client.Log += Log;
-
-            _client.MessageUpdated += MessageUpdated;
-
-            _client.Ready += async () =>
-            {
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
-                    $"Logged in as {_client.CurrentUser.Username}!"));
-            };
+            _client.ShardReady += ShardReady;
+            //_client.MessageUpdated += MessageUpdated;
+            _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _handler.HandleCommands;
+        }
+        private void SetServices() {
+            ServiceCollection collection = new();
+            collection.AddSingleton(_client);
+            collection.AddSingleton<AudioManager>();
+            collection.AddSingleton(_handler);
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
-            
+            collection.AddSingleton(logger);
+
             _lavaNode = new(_client, new(){
                 Hostname = "localhost",
                 Port = 2333,
@@ -74,30 +90,34 @@ namespace TalkingBot
                 },
                 IsSecure = false
             }, logger);
-
-            ServiceCollection collection = new();
-            collection.AddSingleton(_client);
-            collection.AddSingleton<AudioManager>();
-            collection.AddSingleton(_handler);
             collection.AddSingleton(_lavaNode);
-            //collection.AddLavaNode(conf => {
-            //    conf.Hostname = "localhost";
-            //    conf.Port = 2333;
-            //    conf.Authorization = "youshallnotpass";
-            //    conf.SelfDeaf = false;
-            //    conf.SocketConfiguration = new() {
-            //        ReconnectAttempts = 3, 
-            //        ReconnectDelay = TimeSpan.FromSeconds(5), 
-            //        BufferSize = 1024
-            //    };
-            //});
-            collection.AddSingleton(logger);
+
             ServiceManager.SetProvider(collection);
-
-            RandomStatic.Initialize();
-
-            Logger.Initialize(LogLevel.Debug);
         }
+
+        public async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
+            if(user is not SocketGuildUser guildUser) return;
+            if(user.Id == _client.CurrentUser.Id) return;
+            
+            SocketVoiceChannel channel = prevVs.VoiceChannel;
+
+            if(channel != null) {
+                var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
+
+                if(shard != null) {
+                    var usr = shard.Guilds.First().GetUser(shard.CurrentUser.Id);
+                    if(usr == null) return;
+
+                    Logger.Instance?.LogDebug("Bot is not null");
+
+                    var users = channel.ConnectedUsers;
+                    if(usr.VoiceChannel != null && usr.VoiceChannel.Id == channel.Id && users.Count == 1) {
+                        await AudioManager.LeaveAsync(shard.Guilds.First());
+                    }
+                }
+            }
+        }
+
         public async Task Run()
         {
             await _client.LoginAsync(TokenType.Bot, _talbConfig.Token);
@@ -105,20 +125,25 @@ namespace TalkingBot
 
             Stopwatch sw = new();
 
-            while (_client.ConnectionState != ConnectionState.Connected) await Task.Delay(10);
 
-            foreach(ulong guildid in _talbConfig.Guilds)
-            {
-                sw.Restart();
-                await _handler.BuildCommands(_client, guildid);
-                sw.Stop();
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
-                    $"Commands ({_handler.GetLength()} in total) built successfully for {_client.GetGuild(guildid).Name} ({guildid}) in "+
-                    $"{sw.Elapsed.TotalSeconds}s."));
+            foreach(var shard in _client.Shards) {
+                while (shard.ConnectionState != ConnectionState.Connected) await Task.Delay(10);
+
+                Logger.Instance?.LogDebug($"Shard for {shard.Guilds.First().Name} connected");
+
+                foreach(var guild in shard.Guilds)
+                {
+                    sw.Restart();
+                    await _handler.BuildCommands(shard, guild.Id);
+                    sw.Stop();
+                    await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
+                        $"Commands ({_handler.GetLength()} in total) built successfully for {guild.Name} ({guild.Id}) in "+
+                        $"{sw.Elapsed.TotalSeconds}s."));
+                }
+
+                await shard.SetActivityAsync(
+                    new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
             }
-            await _client.SetActivityAsync(
-                new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
-            
             try
             {
                 await VictoriaExtensions.UseLavaNodeAsync(ServiceManager.ServiceProvider);
@@ -128,7 +153,6 @@ namespace TalkingBot
             {
                 await Log(new(LogSeverity.Critical, "TalkingBotClient.Run()", "Lavalink connection failed!", ex));
             }
-
             await Task.Delay(-1);
         }
         private async Task MessageUpdated(Cacheable<IMessage, ulong> before, 
