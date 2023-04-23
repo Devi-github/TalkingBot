@@ -49,11 +49,10 @@ namespace TalkingBot
 
             _handler = CommandsContainer.BuildHandler();
 
-            _client = new(new int[2] {0, 1}, _config);
+            _client = new(_config);
 
             SetEvents();
             
-            _client.ShardReady += ShardReady;
 
             SetServices();
 
@@ -65,7 +64,8 @@ namespace TalkingBot
         }
         private void SetEvents() {
             _client.Log += Log;
-            _client.MessageUpdated += MessageUpdated;
+            _client.ShardReady += ShardReady;
+            //_client.MessageUpdated += MessageUpdated;
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _handler.HandleCommands;
         }
@@ -97,16 +97,22 @@ namespace TalkingBot
 
         public async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
             if(user is not SocketGuildUser guildUser) return;
-
+            if(user.Id == _client.CurrentUser.Id) return;
+            
             SocketVoiceChannel channel = prevVs.VoiceChannel;
 
-            if(channel != null && channel.Id != newVs.VoiceChannel.Id) {
-                var clientUser = channel.GetUser(_client.CurrentUser.Id);
-                if(clientUser != null) {
-                    IGuildUser bot = clientUser as IGuildUser;
+            if(channel != null) {
+                var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
+
+                if(shard != null) {
+                    var usr = shard.Guilds.First().GetUser(shard.CurrentUser.Id);
+                    if(usr == null) return;
+
+                    Logger.Instance?.LogDebug("Bot is not null");
+
                     var users = channel.ConnectedUsers;
-                    if(bot.VoiceChannel != null && bot.VoiceChannel.Id == channel.Id && users.Count == 1) {
-                        await bot.VoiceChannel!.DisconnectAsync();
+                    if(usr.VoiceChannel != null && usr.VoiceChannel.Id == channel.Id && users.Count == 1) {
+                        await AudioManager.LeaveAsync(shard.Guilds.First());
                     }
                 }
             }
