@@ -75,7 +75,7 @@ namespace TalkingBot.Core.Music
                 };
 
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
-                if(player.Track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
+                if(player.Track.Duration < timecode) return new() { message = "The timecode is outside of track's length!", ephemeral = true};
                 await player.SeekAsync(timecode);
 
                 return new() {
@@ -84,6 +84,35 @@ namespace TalkingBot.Core.Music
             } catch(Exception e)
             {
                 return new() { message = $"Error\n{e}", ephemeral = true };
+            }
+        }
+        public static InteractionResponse SetLoop(IGuild guild, int times) {
+            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
+            
+            if(times == 0 || times < -1) return new() { message = "Cannot loop negative or zero times", ephemeral = true };
+
+            try {
+                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
+                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+
+                if (player.PlayerState is not PlayerState.Playing) return new() {
+                    message = "Music is not playing. To loop, play something first",
+                    ephemeral = true
+                };
+
+                if(isOnLoop) {
+                    loopRemaining = times;
+                    if(loopRemaining == -1) return new() { message = $"Successfully reset to loop indefinitely" };
+                    return new() { message = $"Successfully reset to loop {times} times" };
+                } else {
+                    isOnLoop = true;
+                    loopRemaining = times;
+                    if(loopRemaining == -1) return new() { message = $"Successfully set to loop indefinitely" };
+                    return new() { message = $"Successfully set to loop {times} times"};
+                }
+            } catch(Exception e)
+            {
+                return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
         public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, 
@@ -98,7 +127,7 @@ namespace TalkingBot.Core.Music
                     await _lavaNode.JoinAsync(user.VoiceChannel, channel);
                 } catch(Exception ex)
                 {
-                    return new() { message = $"Error\n{ex.Message}" };
+                    return new() { message = $"Error\n{ex.Message}", ephemeral = true };
                 }
             }
 
@@ -144,7 +173,7 @@ namespace TalkingBot.Core.Music
                 await player.PlayAsync(track);
                 await player.SeekAsync(timecode);
 
-                await TalkingBotClient._client.SetActivityAsync(
+                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(
                     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
                 
                 var embed = new EmbedBuilder()
@@ -173,7 +202,7 @@ namespace TalkingBot.Core.Music
                 if (player.PlayerState is PlayerState.Playing) await player.StopAsync();
                 await _lavaNode.LeaveAsync(player.VoiceChannel);
 
-                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
@@ -196,7 +225,7 @@ namespace TalkingBot.Core.Music
                 await player.StopAsync();
                 player.Vueue.Clear();
 
-                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
@@ -293,7 +322,7 @@ namespace TalkingBot.Core.Music
                 
                 await player.SkipAsync();
 
-                await TalkingBotClient._client.SetActivityAsync(
+                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(
                     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
                 
                 string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
@@ -438,27 +467,42 @@ namespace TalkingBot.Core.Music
         public static async Task OnTrackEndAsync(TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
         {
             Logger.Instance?.LogDebug("Track ended!");
-            if (arg.Reason != TrackEndReason.Finished) {
+            if (arg.Reason != TrackEndReason.Finished) 
+            {
+                loopRemaining = 0;
+                isOnLoop = false;
                 Logger.Instance?.LogDebug("Queue finished!");
-                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
-            if (!arg.Player.Vueue.TryDequeue(out var queueable)) {
-                Logger.Instance?.LogDebug("Dequeue was not successful, i guess!");
-                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+            if(isOnLoop && (loopRemaining == -1 || loopRemaining > 0)) { // do loop
+                await arg.Player.PlayAsync(arg.Track);
+                loopRemaining -= (loopRemaining == -1) ? 0 : 1;
+                if(loopRemaining == 0) isOnLoop = false;
+                return;
+            }
+            if (!arg.Player.Vueue.TryDequeue(out var queueable)) 
+            {
+                loopRemaining = 0;
+                isOnLoop = false;
+                Logger.Instance?.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
+                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if (!(queueable is LavaTrack track))
             {
+                loopRemaining = 0;
+                isOnLoop = false;
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
-                await TalkingBotClient._client.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
 
             Logger.Instance?.LogDebug("Trying to play a new track!");
+
             await arg.Player.PlayAsync(track);
 
-            await TalkingBotClient._client.SetActivityAsync(new Game(track.Title, 
+            await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game(track.Title, 
                 ActivityType.Listening, ActivityProperties.Join, track.Url));
 
             string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";

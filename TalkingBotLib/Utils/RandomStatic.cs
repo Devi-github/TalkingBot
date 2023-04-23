@@ -10,6 +10,10 @@ namespace TalkingBot.Utils
     {
         private static Random? random;
 
+        static RandomStatic() {
+            Initialize();
+        }
+
         public static void Initialize()
         {
             random = new Random();

@@ -169,6 +169,19 @@ namespace TalkingBot
                     });
                 }
             });
+            handler.AddCommand(new() {
+                name = "loop",
+                description = "Loops current track",
+                Handler = Loop,
+                options = new List<SlashCommandOption>() {
+                    new() {
+                        name = "times",
+                        isRequired = false,
+                        description = "How many times to loop",
+                        optionType = ApplicationCommandOptionType.Integer
+                    }
+                }
+            });
 
             return handler;
         }
@@ -269,6 +282,13 @@ namespace TalkingBot
         private static async Task GetPosition(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, AudioManager.GetCurrentPosition(guild));
+        }
+        private static async Task Loop(SocketSlashCommand command) {
+            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            int times = -1;
+            if(command.Data.Options.Count != 0)
+                times = Convert.ToInt32(command.Data.Options.ToList()[0].Value); // TODO: FIXME: this is bad. need to change it
+            await RespondCommandAsync(command, AudioManager.SetLoop(guild, times));
         }
     }
 }
