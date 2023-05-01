@@ -145,7 +145,7 @@ namespace TalkingBot.Core.Music
                 if (search.Status == Victoria.Responses.Search.SearchStatus.NoMatches) 
                     return new() { message = $"Could not find anything for '{query}'", ephemeral = true };
 
-                track = search.Tracks.FirstOrDefault();
+                track = search.Tracks.FirstOrDefault()!;
 
                 string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
 
@@ -201,6 +201,9 @@ namespace TalkingBot.Core.Music
                 if (!success) throw new Exception("Player get failed. Probably not connected");
                 if (player.PlayerState is PlayerState.Playing) await player.StopAsync();
                 await _lavaNode.LeaveAsync(player.VoiceChannel);
+
+                loopRemaining = 0;
+                isOnLoop = false;
 
                 await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 

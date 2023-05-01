@@ -53,7 +53,6 @@ namespace TalkingBot
 
             SetEvents();
             
-
             SetServices();
 
             Logger.Initialize(LogLevel.Debug);
@@ -95,9 +94,17 @@ namespace TalkingBot
             ServiceManager.SetProvider(collection);
         }
 
-        public async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
+        private async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
             if(user is not SocketGuildUser guildUser) return;
-            if(user.Id == _client.CurrentUser.Id) return;
+            if(user.Id == _client.CurrentUser.Id && newVs.VoiceChannel == null) {
+                var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
+                if(shard == null) {
+                    Logger.Instance?.LogError("Shard doesn't exist for the guild. WTF");
+                    return;
+                }
+                Logger.Instance?.LogDebug("Bot was disconnected from the voice");
+                await AudioManager.LeaveAsync(shard.Guilds.First());
+            }
             
             SocketVoiceChannel channel = prevVs.VoiceChannel;
 
@@ -108,14 +115,17 @@ namespace TalkingBot
                     var usr = shard.Guilds.First().GetUser(shard.CurrentUser.Id);
                     if(usr == null) return;
 
-                    Logger.Instance?.LogDebug("Bot is not null");
-
                     var users = channel.ConnectedUsers;
                     if(usr.VoiceChannel != null && usr.VoiceChannel.Id == channel.Id && users.Count == 1) {
+                        Logger.Instance?.LogDebug("Bot was disconnected from the voice");
                         await AudioManager.LeaveAsync(shard.Guilds.First());
                     }
                 }
             }
+        }
+        private async Task OnBotDisconnect(Exception e, DiscordSocketClient shard) {
+            Logger.Instance?.LogError("Disconnected", e);
+            await AudioManager.LeaveAsync(shard.Guilds.First());
         }
 
         public async Task Run()
