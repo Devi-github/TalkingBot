@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 # Adding vscode to ignore because, let's be honest, who doesn't?
 .vscode
+.github
+application.yml
+build

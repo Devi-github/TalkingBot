@@ -9,6 +9,10 @@ namespace TalkingBot.Core
 {
     public struct TalkingBotConfig
     {
+        [JsonProperty("lavalinkHost")]
+        public string LavalinkHostname { get; set; }
+        [JsonProperty("lavalinkPort")]
+        public int LavalinkPort { get; set; }
         [JsonProperty("token")]
         public string Token { get; set; }
         [JsonProperty("guilds")]

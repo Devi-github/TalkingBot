@@ -78,8 +78,8 @@ namespace TalkingBot
             collection.AddSingleton(logger);
 
             _lavaNode = new(_client, new(){
-                Hostname = "localhost",
-                Port = 2333,
+                Hostname = _talbConfig.LavalinkHostname,
+                Port = (ushort)_talbConfig.LavalinkPort,
                 Authorization = "youshallnotpass",
                 SelfDeaf = false,
                 SocketConfiguration = new() {
@@ -144,7 +144,7 @@ namespace TalkingBot
                 foreach(var guild in shard.Guilds)
                 {
                     sw.Restart();
-                    await _handler.BuildCommands(shard, guild.Id);
+                    await _handler.BuildCommands(shard, guild.Id, _talbConfig.ForceUpdateCommands);
                     sw.Stop();
                     await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
                         $"Commands ({_handler.GetLength()} in total) built successfully for {guild.Name} ({guild.Id}) in "+

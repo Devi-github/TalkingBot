@@ -22,6 +22,8 @@ namespace TalkingBot
                 Environment.Exit(-1);
             }
             TalkingBotConfig config = new() {
+                LavalinkHostname = "localhost",
+                LavalinkPort = 2333,
                 Token = token,
                 Guilds = new ulong[] {},
                 ForceUpdateCommands = false

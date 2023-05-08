@@ -1,0 +1,7 @@
+{
+    "lavalinkHost": "localhost",
+    "lavalinkPort": 2333,
+    "token": "",
+    "guilds": [],
+    "forceUpdateCommands": false
+}
