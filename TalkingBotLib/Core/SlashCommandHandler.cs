@@ -69,6 +69,12 @@ namespace TalkingBot.Core
             var existingCommands = await rest.GetGuildApplicationCommands(guildId);
 
             Stopwatch sw = new();
+
+            if(forceUpdateCommands) {
+                Console.WriteLine("Forcefully overwriting commands for {0} ({1}).", guild.Name, guildId);
+                await rest.BulkOverwriteGuildCommands(new ApplicationCommandProperties[0] {}, guildId);
+            }
+
             foreach(var command in commands)
             {
                 if(!forceUpdateCommands && 
