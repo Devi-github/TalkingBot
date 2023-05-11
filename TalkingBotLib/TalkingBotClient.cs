@@ -55,7 +55,7 @@ namespace TalkingBot
             
             SetServices();
 
-            Logger.Initialize(LogLevel.Debug);
+            Logger.Initialize(LogLevel.Information);
         }
         private async Task ShardReady(DiscordSocketClient shard) {
             await Log(new(LogSeverity.Info, "TalkingBotClient.Ready()", 
