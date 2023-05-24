@@ -19,6 +19,7 @@ using TalkingBot.Core.Logging;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using TalkingBot.Core.Music;
+using TalkingBot.Core.Caching;
 
 namespace TalkingBot
 {
@@ -35,6 +36,19 @@ namespace TalkingBot
         private static TalkingBotConfig _talbConfig;
         private static SlashCommandHandler _handler;
 
+        [System.Serializable]
+        public struct CachedMessageRole {
+            public ulong messageId;
+            public ulong roleId;
+        }
+
+        public static List<CachedMessageRole> _cached_message_role;
+        private static Cacher<CachedMessageRole> _message_cacher;
+
+        public static void SaveCache() {
+            _message_cacher.SaveCached(nameof(CachedMessageRole), _cached_message_role.ToArray());
+        }
+
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
             _talbConfig = tbConfig;
@@ -43,17 +57,20 @@ namespace TalkingBot
                 UseInteractionSnowflakeDate = true,
                 AlwaysDownloadUsers = true,
                 TotalShards = _talbConfig.Guilds.Length,
-                GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildPresences
+                GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildPresences | GatewayIntents.GuildEmojis
             };
             if (clientConfig != null) _config = clientConfig;
 
             _handler = CommandsContainer.BuildHandler();
-
             _client = new(_config);
+            _cached_message_role = new List<CachedMessageRole>();
+            _message_cacher = new();
 
             SetEvents();
-            
             SetServices();
+
+            var cachedMsgs = _message_cacher.LoadCached(nameof(CachedMessageRole));
+            if(cachedMsgs is not null) _cached_message_role = cachedMsgs.ToList();
 
             Logger.Initialize(LogLevel.Information);
         }
@@ -67,6 +84,25 @@ namespace TalkingBot
             //_client.MessageUpdated += MessageUpdated;
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _handler.HandleCommands;
+            _client.ButtonExecuted += _handler.HandleButtons;
+            _client.ReactionAdded += OnReactionAdded;
+        }
+
+        // TODO: Remove later or use it for other purpose
+        private async Task OnReactionAdded(Cacheable<IUserMessage, ulong> message, 
+            Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction) {
+            return;
+            if(reaction.MessageId != 1110959112616947862) return;
+            if(reaction.Emote.Name != "🖐️") return;
+
+            Logger.Instance?.LogDebug($"Reaction triggered by {reaction.User.Value.Username}");
+
+            try {
+                var role = (channel.Value as SocketGuildChannel)!.Guild.GetRole(1110657771768119371);
+                await (reaction.User.Value as SocketGuildUser)!.AddRoleAsync(role);
+            } catch(Exception e) {
+                Logger.Instance!.LogError($"Error occured while trying to give a role: {e}");
+            }
         }
         private void SetServices() {
             ServiceCollection collection = new();
@@ -90,6 +126,7 @@ namespace TalkingBot
                 IsSecure = false
             }, logger);
             collection.AddSingleton(_lavaNode);
+            collection.AddSingleton(_message_cacher);
 
             ServiceManager.SetProvider(collection);
         }

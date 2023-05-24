@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace TalkingBot.Core.Logging
 {
-    internal class Logger : ILogger
+    public class Logger : ILogger
     {
         public static Logger? Instance;
 

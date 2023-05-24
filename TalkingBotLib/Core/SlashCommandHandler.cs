@@ -42,10 +42,12 @@ namespace TalkingBot.Core
     {
         private List<InternalSlashCommand> commands;
         private List<Func<SocketSlashCommand, Task>> commandHandlers;
+        private Dictionary<string, Func<SocketMessageComponent, Task>> buttonHandlers;
         public SlashCommandHandler() 
         {
             commands = new List<InternalSlashCommand>();
             commandHandlers = new List<Func<SocketSlashCommand, Task>>();
+            buttonHandlers = new Dictionary<string, Func<SocketMessageComponent, Task>>();
         }
         public SlashCommandHandler AddCommand(SlashCommand command)
         {
@@ -62,6 +64,9 @@ namespace TalkingBot.Core
         }
         public int GetLength()
             => commands.Count;
+        public void AddButtonHandler(string buttonId, Func<SocketMessageComponent, Task> handler) {
+            buttonHandlers.Add(buttonId, handler);
+        }
         public async Task BuildCommands(DiscordSocketClient client, ulong guildId, bool forceUpdateCommands=false)
         {
             var guild = client.GetGuild(guildId);
@@ -121,6 +126,13 @@ namespace TalkingBot.Core
             InternalSlashCommand cmdToExecute = commands.Find(x => x.name == command.CommandName);
 
             await commandHandlers[cmdToExecute.handlerId](command);
+        }
+        public async Task HandleButtons(SocketMessageComponent component) {
+            if (Logger.Instance is null) throw new NullReferenceException("Logger was null when accessed");
+
+            
+
+            await buttonHandlers[component.Data.CustomId](component);
         }
     }
 }

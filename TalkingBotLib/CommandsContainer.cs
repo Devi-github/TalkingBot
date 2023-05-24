@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using TalkingBot.Core;
 using TalkingBot.Core.Music;
 using TalkingBot.Utils;
+using TalkingBot.Core.Caching;
+using TalkingBot.Core.Logging;
 
 namespace TalkingBot
 {
@@ -151,7 +153,7 @@ namespace TalkingBot
                 }
             });
             handler.AddCommand(new() {
-                name = "trlen",
+                name = "length",
                 description = "Gets length of a current track",
                 Handler = GetLen
             });
@@ -182,13 +184,116 @@ namespace TalkingBot
                     }
                 }
             });
+            handler.AddCommand(new() {
+                name = "rolemsg",
+                description = "Creates a message in the current channel that gives specified role on button click",
+                Handler = RoleMsg,
+                options = new List<SlashCommandOption>() {
+                    new() {
+                        name = "role",
+                        description = "Role to give",
+                        optionType = ApplicationCommandOptionType.Role,
+                        isRequired = true
+                    },
+                    new() {
+                        name = "message",
+                        description = "Message to send",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = true
+                    },
+                    new() {
+                        name = "label",
+                        description = "Button label (title) to get role",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = true
+                    }
+                }
+            });
+            handler.AddButtonHandler("add-role", AddRoleButton);
 
             return handler;
+        }
+        public static async Task AddRoleButton(SocketMessageComponent component) {
+            var user = component.User as SocketGuildUser;
+            var channel = component.Channel as SocketGuildChannel;
+            var messageId = component.Message.Id;
+            var role = channel.Guild
+                .GetRole(TalkingBotClient._cached_message_role
+                .FirstOrDefault(x => x.messageId == messageId).roleId);
+
+            try {
+                await user!.AddRoleAsync(role);
+            } catch(Exception e) {
+                await component.RespondAsync($"Error occured while giving role. "+
+                "Probably the bot doesn't have enough permissions. Ask administrator "+
+                "if you think this problem shouldn't exist.", ephemeral: true);
+                return;
+            }
+
+            await component.RespondAsync($"You successfully got the role!", ephemeral: true);
         }
         private static async Task RespondCommandAsync(SocketSlashCommand command, InteractionResponse response)
         {
             await command.RespondAsync(response.message, isTTS: response.isTts, 
                 ephemeral: response.ephemeral, embed: response.embed);
+        }
+        private static bool ComparePermissions(GuildPermissions targetGuildPerms, GuildPermissions userGuildPerms)
+        {
+            //True if the target has a higher role.
+            bool targetHasHigherPerms = false;
+            //If the user is not admin but target is.
+            if(!userGuildPerms.Administrator && targetGuildPerms.Administrator) {
+                //The target has higher permission than the user.
+                targetHasHigherPerms = true;
+            } else if(!userGuildPerms.ManageGuild && targetGuildPerms.ManageGuild) {
+                targetHasHigherPerms = true;
+            } else if(!userGuildPerms.ManageChannels && targetGuildPerms.ManageChannels) {
+                targetHasHigherPerms = true;
+            } else if(!userGuildPerms.BanMembers && targetGuildPerms.BanMembers) {
+                targetHasHigherPerms = true;
+            } else if(!userGuildPerms.KickMembers && targetGuildPerms.KickMembers) {
+                targetHasHigherPerms = true;
+            }
+
+            return targetHasHigherPerms;
+        }
+        private static async Task RoleMsg(SocketSlashCommand command) {
+            SocketRole role = command.Data.Options.ToList()[0].Value as SocketRole;
+            string message = command.Data.Options.ToList()[1].Value as string;
+            string buttonLabel = command.Data.Options.ToList()[2].Value as string;
+
+            var author = command.User as SocketGuildUser;
+
+            string newmessage = message!.Replace("  ", "\n");
+
+            if(!author!.GuildPermissions.ManageRoles || !ComparePermissions(author!.GuildPermissions, role!.Permissions)) {
+                
+                await RespondCommandAsync(command, new() { message = "You don't have permissions " +
+                "to perform this command!", ephemeral = true });
+                return;
+            }
+
+            var actionRow = new ActionRowBuilder();
+
+            var channel = command.Channel;
+
+            var btn = new ButtonBuilder() {
+                Label = buttonLabel,
+                CustomId = $"add-role",
+                Style = ButtonStyle.Primary
+            };
+
+            var components = new ComponentBuilder()
+                .WithButton(btn);
+
+            var msg = await channel.SendMessageAsync(text: newmessage, components: components.Build());
+            
+            await RespondCommandAsync(command, new() { message = "Message sent successfully!", ephemeral = true });
+
+            var cacher = ServiceManager.GetService<Cacher<TalkingBotClient.CachedMessageRole>>();
+
+            TalkingBotClient._cached_message_role.Add(new() { messageId = msg.Id, roleId = role.Id });
+            TalkingBotClient.SaveCache();
         }
         private static async Task GetLen(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
