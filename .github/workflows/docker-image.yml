@@ -2,7 +2,7 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "docker-cross-platform" ]
   pull_request:
     branches: [ "master" ]
 
