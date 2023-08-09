@@ -26,8 +26,8 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int Branch = 2;
-        public const int Commit = 1;
-        public const int Tweak = 3;
+        public const int Commit = 2;
+        public const int Tweak = 0;
         public const bool IsBuilt = false;
 
         public static LavaNode _lavaNode;
@@ -85,25 +85,8 @@ namespace TalkingBot
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _handler.HandleCommands;
             _client.ButtonExecuted += _handler.HandleButtons;
-            _client.ReactionAdded += OnReactionAdded;
         }
 
-        // TODO: Remove later or use it for other purpose
-        private async Task OnReactionAdded(Cacheable<IUserMessage, ulong> message, 
-            Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction) {
-            return;
-            if(reaction.MessageId != 1110959112616947862) return;
-            if(reaction.Emote.Name != "🖐️") return;
-
-            Logger.Instance?.LogDebug($"Reaction triggered by {reaction.User.Value.Username}");
-
-            try {
-                var role = (channel.Value as SocketGuildChannel)!.Guild.GetRole(1110657771768119371);
-                await (reaction.User.Value as SocketGuildUser)!.AddRoleAsync(role);
-            } catch(Exception e) {
-                Logger.Instance!.LogError($"Error occured while trying to give a role: {e}");
-            }
-        }
         private void SetServices() {
             ServiceCollection collection = new();
             collection.AddSingleton(_client);
@@ -194,7 +177,6 @@ namespace TalkingBot
             try
             {
                 await VictoriaExtensions.UseLavaNodeAsync(ServiceManager.ServiceProvider);
-                await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", "Lavalink connected"));
             }
             catch (Exception ex)
             {

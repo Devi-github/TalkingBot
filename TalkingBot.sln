@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RegenerateConfig", "Regener
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TalkingBotLib", "TalkingBotLib\TalkingBotLib.csproj", "{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Victoria", "Victoria\Victoria.csproj", "{74B980B3-8CE8-4BF4-B185-BA7B4F970AC9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0EEB398B-05BF-43C0-B77E-1AA9C13633FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74B980B3-8CE8-4BF4-B185-BA7B4F970AC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74B980B3-8CE8-4BF4-B185-BA7B4F970AC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74B980B3-8CE8-4BF4-B185-BA7B4F970AC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74B980B3-8CE8-4BF4-B185-BA7B4F970AC9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

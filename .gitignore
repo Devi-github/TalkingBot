@@ -367,3 +367,6 @@ FodyWeavers.xsd
 #.github
 application.yml
 build
+
+TalkingBot/.DS_Store
+.DS_Store

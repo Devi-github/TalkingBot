@@ -21,11 +21,30 @@ namespace TalkingBot
                 Console.Error.WriteLine("Token is not specified!");
                 Environment.Exit(-1);
             }
+            Console.Write("Enter guild ids (separated by commas): ");
+            string? guildIds = Console.ReadLine();
+            List<ulong> guilds = new();
+            if(string.IsNullOrEmpty(guildIds))
+            {
+                Console.WriteLine("Guild ids not specified! The bot will not work in any guild!");
+            } else
+            {
+                string[] guildsSplit = guildIds.Split(',');
+                foreach(string guildId in guildsSplit)
+                {
+                    if (!ulong.TryParse(guildId, out ulong _guildId))
+                    {
+                        Console.Error.WriteLine("Incorrect guild id! Skipping '{0}'", guildId);
+                        continue;
+                    }
+                    guilds.Add(_guildId);
+                }
+            }
             TalkingBotConfig config = new() {
                 LavalinkHostname = "localhost",
                 LavalinkPort = 2333,
                 Token = token,
-                Guilds = new ulong[] {},
+                Guilds = guilds.ToArray(),
                 ForceUpdateCommands = false
             };
 

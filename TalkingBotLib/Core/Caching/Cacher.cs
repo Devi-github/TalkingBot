@@ -40,8 +40,9 @@ namespace TalkingBot.Core.Caching {
                 using(StreamReader sr = new StreamReader(dir + filename)) {
                     json = sr.ReadToEnd();
                 }
-            } catch(Exception e) {
-                Console.WriteLine($"Error occured while reading cache: {e}");
+            } catch(IOException) {
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.Create(dir + filename);
                 return null;
             }
 
