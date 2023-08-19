@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,5 +20,7 @@ namespace TalkingBot.Core
         public ulong[] Guilds { get; set; }
         [JsonProperty("forceUpdateCommands")]
         public bool ForceUpdateCommands { get; set; }
+        [JsonProperty("logLevel")]
+        public LogLevel LogLevel { get; set; }
     }
 }
