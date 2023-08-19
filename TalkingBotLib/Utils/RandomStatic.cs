@@ -18,6 +18,7 @@ namespace TalkingBot.Utils
         {
             random = new Random();
         }
+        // XXX: I am not sure if those checks are necessary since static constructor should initialize random immediately
         public static int Next()
         {
             if (random == null) throw new NullReferenceException("Uninitialized random was used");

@@ -371,7 +371,7 @@ namespace TalkingBot
             if(command.Data.Options.Count != 0)
                 limit = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
 
-            await RespondCommandAsync(command, new() { message = 
+            await RespondCommandAsync(command, new() { message = // TODO: Switch to using Random.Shared
                 $"**{(RandomStatic.NextInt64(limit) + 1).ToString("N0")}**/{limit.ToString("N0")}" });
         }
         private static async Task Skip(SocketSlashCommand command)

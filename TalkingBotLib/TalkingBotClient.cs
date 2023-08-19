@@ -26,15 +26,15 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int Branch = 2;
-        public const int Commit = 2;
+        public const int Commit = 3;
         public const int Tweak = 0;
         public const bool IsBuilt = false;
 
-        public static LavaNode _lavaNode;
-        public static DiscordShardedClient _client;
-        private static DiscordSocketConfig _config;
+        public static LavaNode? _lavaNode;
+        public static DiscordShardedClient? _client;
+        private static DiscordSocketConfig? _config;
         private static TalkingBotConfig _talbConfig;
-        private static SlashCommandHandler _handler;
+        private static SlashCommandHandler? _handler;
 
         [System.Serializable]
         public struct CachedMessageRole {
@@ -42,8 +42,8 @@ namespace TalkingBot
             public ulong roleId;
         }
 
-        public static List<CachedMessageRole> _cached_message_role;
-        private static Cacher<CachedMessageRole> _message_cacher;
+        public static List<CachedMessageRole> _cached_message_role = new();
+        private static Cacher<CachedMessageRole> _message_cacher = new();
 
         public static void SaveCache() {
             _message_cacher.SaveCached(nameof(CachedMessageRole), _cached_message_role.ToArray());
@@ -63,14 +63,14 @@ namespace TalkingBot
 
             _handler = CommandsContainer.BuildHandler();
             _client = new(_config);
-            _cached_message_role = new List<CachedMessageRole>();
+            _cached_message_role = new();
             _message_cacher = new();
 
             SetEvents();
             SetServices();
 
             var cachedMsgs = _message_cacher.LoadCached(nameof(CachedMessageRole));
-            if(cachedMsgs is not null) _cached_message_role = cachedMsgs.ToList();
+            if(cachedMsgs is not null) _cached_message_role = cachedMsgs!.ToList();
 
             Logger.Initialize(LogLevel.Information);
         }
@@ -79,19 +79,19 @@ namespace TalkingBot
                 $"Logged in as a shard {shard.CurrentUser.Username}!"));
         }
         private void SetEvents() {
-            _client.Log += Log;
+            _client!.Log += Log;
             _client.ShardReady += ShardReady;
             //_client.MessageUpdated += MessageUpdated;
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
-            _client.SlashCommandExecuted += _handler.HandleCommands;
+            _client.SlashCommandExecuted += _handler!.HandleCommands;
             _client.ButtonExecuted += _handler.HandleButtons;
         }
 
         private void SetServices() {
             ServiceCollection collection = new();
-            collection.AddSingleton(_client);
+            collection.AddSingleton(_client!);
             collection.AddSingleton<AudioManager>();
-            collection.AddSingleton(_handler);
+            collection.AddSingleton(_handler!);
 
             LavaLogger logger = new LavaLogger(LogLevel.Information);
             collection.AddSingleton(logger);
@@ -116,7 +116,7 @@ namespace TalkingBot
 
         private async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
             if(user is not SocketGuildUser guildUser) return;
-            if(user.Id == _client.CurrentUser.Id && newVs.VoiceChannel == null) {
+            if(user.Id == _client!.CurrentUser.Id && newVs.VoiceChannel == null) {
                 var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
                 if(shard == null) {
                     Logger.Instance?.LogError("Shard doesn't exist for the guild. WTF");
@@ -150,7 +150,7 @@ namespace TalkingBot
 
         public async Task Run()
         {
-            await _client.LoginAsync(TokenType.Bot, _talbConfig.Token);
+            await _client!.LoginAsync(TokenType.Bot, _talbConfig.Token);
             await _client.StartAsync();
 
             Stopwatch sw = new();
@@ -164,7 +164,7 @@ namespace TalkingBot
                 foreach(var guild in shard.Guilds)
                 {
                     sw.Restart();
-                    await _handler.BuildCommands(shard, guild.Id, _talbConfig.ForceUpdateCommands);
+                    await _handler!.BuildCommands(shard, guild.Id, _talbConfig.ForceUpdateCommands);
                     sw.Stop();
                     await Log(new(LogSeverity.Info, "TalkingBotClient.Run()", 
                         $"Commands ({_handler.GetLength()} in total) built successfully for {guild.Name} ({guild.Id}) in "+
@@ -192,7 +192,7 @@ namespace TalkingBot
         }
         public void Dispose()
         {
-            _client.Dispose();
+            _client!.Dispose();
             GC.SuppressFinalize(this);
         }
         private Task Log(LogMessage message)
