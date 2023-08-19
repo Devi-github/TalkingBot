@@ -12,7 +12,6 @@ namespace TalkingBot
     {
         public static async Task CreateDefaultConfig(string cnfpath)
         {
-
             Console.WriteLine("Generating essential config...");
             Console.Write("Enter application token: ");
             string? token = Console.ReadLine();
@@ -21,6 +20,7 @@ namespace TalkingBot
                 Console.Error.WriteLine("Token is not specified!");
                 Environment.Exit(-1);
             }
+            
             Console.Write("Enter guild ids (separated by commas): ");
             string? guildIds = Console.ReadLine();
             List<ulong> guilds = new();
@@ -34,18 +34,20 @@ namespace TalkingBot
                 {
                     if (!ulong.TryParse(guildId, out ulong _guildId))
                     {
-                        Console.Error.WriteLine("Incorrect guild id! Skipping '{0}'", guildId);
+                        Console.Error.WriteLine("Invalid guild id! Skipping '{0}'", guildId);
                         continue;
                     }
                     guilds.Add(_guildId);
                 }
             }
+            
             TalkingBotConfig config = new() {
                 LavalinkHostname = "localhost",
                 LavalinkPort = 2333,
                 Token = token,
                 Guilds = guilds.ToArray(),
-                ForceUpdateCommands = false
+                ForceUpdateCommands = false,
+                LogLevel = Microsoft.Extensions.Logging.LogLevel.Information
             };
 
             using (StreamWriter sw = new(cnfpath))
@@ -54,6 +56,7 @@ namespace TalkingBot
             }
             Console.WriteLine($"Config successfully created at {cnfpath}. " +
                 $"You may edit some parameters there to your liking.");
+            Thread.Sleep(2000); // for people to have time to see the message
         }
     }
 }
