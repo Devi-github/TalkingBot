@@ -340,7 +340,7 @@ namespace TalkingBot.Core.Music
                 
                 await player.SkipAsync();
 
-                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(
+                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
                     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
                 
                 string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
@@ -532,7 +532,7 @@ namespace TalkingBot.Core.Music
 
             var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
-                    .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
+                    .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
                     .WithColor(0x0A90FA)
                     .WithThumbnailUrl(thumbnail)
                     .AddField("Duration", durstr, true)
