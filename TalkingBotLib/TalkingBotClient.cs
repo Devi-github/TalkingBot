@@ -25,8 +25,9 @@ namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
-        public const int Branch = 2;
-        public const int Commit = 3;
+        public const int APILevel = 1;
+        public const int Branch = 3;
+        public const int Commit = 1;
         public const int Tweak = 3;
         public const bool IsBuilt = false;
 
@@ -54,7 +55,7 @@ namespace TalkingBot
             _talkingBotConfig = tbConfig;
             _config = new DiscordSocketConfig() {
                 MessageCacheSize = 100,
-                UseInteractionSnowflakeDate = true,
+                UseInteractionSnowflakeDate = false, // XXX: This sometimes makes my bot throw errors on command, idk why. so i'll keep it false
                 AlwaysDownloadUsers = true,
                 TotalShards = _talkingBotConfig.Guilds.Length,
                 GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildPresences | GatewayIntents.GuildEmojis
