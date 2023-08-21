@@ -1,10 +1,8 @@
 name: Docker Image CI
 
 on:
-  push:
-    branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+  push: # master is now deprecated
+    branches: [ "main" ]
 
 jobs:
   build_and_push_to_registry: # Builds and pushes Docker image to Dockerhub
