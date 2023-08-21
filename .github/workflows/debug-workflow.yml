@@ -7,6 +7,9 @@ on:
       - "*"
       - "!master"
       - "!master"
+  pull_request:
+    branches:
+      - "*"
 
 jobs:
   build_and_push_to_registry: # Builds and pushes Docker image to Dockerhub
