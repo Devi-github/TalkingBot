@@ -26,9 +26,9 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int APILevel = 1;
-        public const int Branch = 4;
+        public const int Branch = 5;
         public const int Commit = 1;
-        public const int Tweak = 1;
+        public const int Tweak = 0;
         public const bool IsBuilt = true;
 
         public static LavaNode? _lavaNode;
