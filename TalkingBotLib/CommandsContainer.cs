@@ -404,7 +404,8 @@ namespace TalkingBot
         }
         private static async Task GotoFunc(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            string timecodeStr = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            var optionList = GetListOfOptionsFromCommand(command);
+            string timecodeStr = (string)GetOptionDataFromOptionList(optionList, "timecode")!.Value;
             bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out double seconds);
             if(!success) {
                 await RespondCommandAsync(command, new() {message = "Failed to parse timecode! Format for the timecode is: 0:00", ephemeral = true});
@@ -414,7 +415,8 @@ namespace TalkingBot
         }
         private static async Task Volume(SocketSlashCommand command)
         {
-            long volume = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            var optionList = GetListOfOptionsFromCommand(command);
+            long volume = (long)GetOptionDataFromOptionList(optionList, "volume")!.Value;
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
 
             await RespondCommandAsync(command, await AudioManager.ChangeVolume(guild, (int)volume));
@@ -429,12 +431,15 @@ namespace TalkingBot
         private static async Task Play(SocketSlashCommand command)
         {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            string query = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            var optionList = GetListOfOptionsFromCommand(command);
+            string query = (string)GetOptionDataFromOptionList(optionList, "query")!.Value;
             double secs = 0;
-            if(command.Data.Options.ToList().Count == 2) { // TODO: this is even worse
-                string timecodeStr = (string)command.Data.Options.ToList()[1].Value; // TODO: FIXME: this is bad. need to change it
-                bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out secs);
-                if(!success) {
+
+            var timecode_data = GetOptionDataFromOptionList(optionList, "timecode");
+
+            if(timecode_data != null) {
+                string timecodeStr = (string)timecode_data.Value;
+                if(!AdditionalUtils.TryParseTimecode(timecodeStr, out secs)) {
                     await RespondCommandAsync(command, new() {message = "Failed to parse timecode! Format for the timecode is: 0:00", ephemeral = true});
                     return;
                 }
@@ -444,7 +449,8 @@ namespace TalkingBot
         }
         private static async Task RemoveSong(SocketSlashCommand command)
         {
-            long index = (long)command.Data.Options.ToList()[0].Value;
+            var optionList = GetListOfOptionsFromCommand(command);
+            long index = (long)GetOptionDataFromOptionList(optionList, "remove")!.Value;
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, AudioManager.RemoveTrack(guild, index));
         }
@@ -471,11 +477,14 @@ namespace TalkingBot
         private static async Task Roll(SocketSlashCommand command)
         {
             long limit = 100;
-            if(command.Data.Options.Count != 0)
-                limit = (long)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
+            var optionList = GetListOfOptionsFromCommand(command);
+            var limit_data = GetOptionDataFromOptionList(optionList, "limit");
 
-            await RespondCommandAsync(command, new() { message = // TODO: Switch to using Random.Shared
-                $"**{(RandomStatic.NextInt64(limit) + 1).ToString("N0")}**/{limit.ToString("N0")}" });
+            if(limit_data != null)
+                limit = (long)limit_data.Value;
+
+            await RespondCommandAsync(command, new() { message =
+                $"**{(Random.Shared.NextInt64(limit) + 1).ToString("N0")}**/{limit.ToString("N0")}" });
         }
         private static async Task Skip(SocketSlashCommand command)
         {
@@ -494,8 +503,10 @@ namespace TalkingBot
         private static async Task Loop(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             int times = -1;
-            if(command.Data.Options.Count != 0)
-                times = Convert.ToInt32(command.Data.Options.ToList()[0].Value); // TODO: FIXME: this is bad. need to change it
+            var optionList = GetListOfOptionsFromCommand(command);
+            var times_data = GetOptionDataFromOptionList(optionList, "times");
+            if(times_data != null)
+                times = Convert.ToInt32(times_data.Value);
             await RespondCommandAsync(command, AudioManager.SetLoop(guild, times));
         }
 #endregion
