@@ -3,7 +3,10 @@ name: Debug Workflow
 
 on:
   push:
-    branches: [ "!main" ]
+    branches: 
+      - "*"
+      - "!master"
+      - "!master"
 
 jobs:
   build_and_push_to_registry: # Builds and pushes Docker image to Dockerhub
