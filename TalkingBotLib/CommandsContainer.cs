@@ -10,6 +10,8 @@ using TalkingBot.Core.Music;
 using TalkingBot.Utils;
 using TalkingBot.Core.Caching;
 using TalkingBot.Core.Logging;
+using Microsoft.Extensions.Logging;
+using System.Drawing;
 
 namespace TalkingBot
 {
@@ -209,10 +211,54 @@ namespace TalkingBot
                     }
                 }
             });
+            handler.AddCommand(new() {
+                name = "embed",
+                description = "Builds embed with specified parameters",
+                Handler = BuildEmbed,
+                options = new List<SlashCommandOption>() {
+                    new() {
+                        name = "title",
+                        isRequired = true,
+                        description = "Title of an embed",
+                        optionType = ApplicationCommandOptionType.String
+                    },
+                    new() {
+                        name = "description",
+                        description = "A description for an embed",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
+                    },
+                    new() {
+                        name = "color",
+                        description = "The color for an embed in CSS format (#ffffff)",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
+                    },
+                    new() {
+                        name = "image-url",
+                        description = "Image url for an embed",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
+                    },
+                    new() {
+                        name = "thumbnail-url",
+                        description = "Thumbnail image url for an embed",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
+                    },
+                    new() {
+                        name = "with-timestamp",
+                        description = "Use current timestamp for an embed",
+                        optionType = ApplicationCommandOptionType.Boolean,
+                        isRequired = true
+                    }
+                }
+            });
             handler.AddButtonHandler("add-role", AddRoleButton);
 
             return handler;
         }
+#region Utils
         public static async Task AddRoleButton(SocketMessageComponent component) {
             var user = component.User as SocketGuildUser;
             var channel = component.Channel as SocketGuildChannel;
@@ -257,6 +303,25 @@ namespace TalkingBot
 
             return targetHasHigherPerms;
         }
+        private static List<SocketSlashCommandDataOption> 
+            GetListOfOptionsFromCommand(SocketSlashCommand command) 
+        => command.Data.Options.ToList();
+
+        private static SocketSlashCommandDataOption? 
+            GetOptionDataFromOptionList(List<SocketSlashCommandDataOption> optionList, string name) 
+        {
+            var result = optionList.Find((x) => x.Name == name);
+            return result;
+        }
+        private static Discord.Color? ParseColorFromString(string color) {
+            var conv = new ColorConverter();
+            var result = (System.Drawing.Color?)conv.ConvertFromString(color);
+            if(result == null) return null;
+
+            return new(result.Value.R, result.Value.G, result.Value.B);
+        }
+#endregion
+#region Commands' handlers
         private static async Task RoleMsg(SocketSlashCommand command) {
             SocketRole role = command.Data.Options.ToList()[0].Value as SocketRole;
             string message = command.Data.Options.ToList()[1].Value as string;
@@ -295,6 +360,44 @@ namespace TalkingBot
             TalkingBotClient._cached_message_role.Add(new() { messageId = msg.Id, roleId = role.Id });
             TalkingBotClient.SaveCache();
         }
+        private static async Task BuildEmbed(SocketSlashCommand command) {
+            // 0 - title, 1 - description, 2 - color
+            // 3 - imageURL, 4 - thumbnailURL, 5 - withTimestamp
+            var list = GetListOfOptionsFromCommand(command);
+            var title = GetOptionDataFromOptionList(list, "title")!;
+            var description = GetOptionDataFromOptionList(list, "description");
+            var color = GetOptionDataFromOptionList(list, "color");
+            var imageURL = GetOptionDataFromOptionList(list, "image-url");
+            var thumbnailURL = GetOptionDataFromOptionList(list, "thumbnail-url");
+            var withTimestamp = GetOptionDataFromOptionList(list, "with-timestamp");
+
+            var embed = new EmbedBuilder();
+
+            embed.WithTitle((string)title.Value);
+            if(description != null) embed.WithDescription((string)description.Value);
+            if(color != null) {
+                var col = ParseColorFromString((string)color.Value);
+                if(col == null) {
+                    await RespondCommandAsync(command,
+                        new() { 
+                            message = "Invalid color code provided!", 
+                            ephemeral = true 
+                        }
+                    );
+                    return;
+                }
+                embed.WithColor(col.Value);
+            }
+            if(imageURL != null) embed.WithImageUrl((string)imageURL.Value);
+            if(thumbnailURL != null) embed.WithThumbnailUrl((string)thumbnailURL.Value);
+            if((bool)withTimestamp!.Value == true) embed.WithCurrentTimestamp();
+
+            await RespondCommandAsync(command, 
+                new() { 
+                    message = "In development", embed = embed.Build() 
+                }
+            );
+        }
         private static async Task GetLen(SocketSlashCommand command) {
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, AudioManager.GetLength(guild));
@@ -328,7 +431,7 @@ namespace TalkingBot
             var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
             string query = (string)command.Data.Options.ToList()[0].Value; // TODO: FIXME: this is bad. need to change it
             double secs = 0;
-            if(command.Data.Options.ToList().Count == 2) {
+            if(command.Data.Options.ToList().Count == 2) { // TODO: this is even worse
                 string timecodeStr = (string)command.Data.Options.ToList()[1].Value; // TODO: FIXME: this is bad. need to change it
                 bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out secs);
                 if(!success) {
@@ -395,5 +498,6 @@ namespace TalkingBot
                 times = Convert.ToInt32(command.Data.Options.ToList()[0].Value); // TODO: FIXME: this is bad. need to change it
             await RespondCommandAsync(command, AudioManager.SetLoop(guild, times));
         }
+#endregion
     }
 }
