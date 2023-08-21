@@ -26,10 +26,10 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int APILevel = 1;
-        public const int Branch = 3;
-        public const int Commit = 3;
-        public const int Tweak = 0;
-        public const bool IsBuilt = false;
+        public const int Branch = 4;
+        public const int Commit = 1;
+        public const int Tweak = 1;
+        public const bool IsBuilt = true;
 
         public static LavaNode? _lavaNode;
         public static DiscordShardedClient? _client;
