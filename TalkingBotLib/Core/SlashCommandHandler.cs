@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using TalkingBot.Core.Logging;
+using Discord.Rest;
 
 namespace TalkingBot.Core
 {
@@ -67,6 +68,34 @@ namespace TalkingBot.Core
         public void AddButtonHandler(string buttonId, Func<SocketMessageComponent, Task> handler) {
             buttonHandlers.Add(buttonId, handler);
         }
+        private static bool OptionChanged(RestApplicationCommandOption op1, SlashCommandOption op2) {
+            return op1.Name != op2.name || op1.Description != op2.description
+                || op1.IsRequired != op2.isRequired || op1.Type != op2.optionType
+                || op1.IsDefault != op2.isDefault || op1.MinValue != op2.minValue
+                || op1.MaxValue != op2.maxValue || op1.IsAutocomplete != op2.isAutocomplete;
+        }
+        private static bool 
+            CommandExistsAndUnchanged(
+                IReadOnlyCollection<RestGuildCommand> commands, 
+                InternalSlashCommand cmd) 
+        {
+            // Check if exists
+            var restCommand = commands.ToList().Find(x => x.Name == cmd.name);
+            if(restCommand == null) return false;
+            var options = restCommand.Options.ToList();
+
+            // Check if option count changed
+            if(cmd.options == null && options.Count != 0) return false;
+            if(options.Count != cmd.options!.Count) return false;
+
+            // Check if any option changed
+            for(int i = 0; i < options.Count; i++) {
+                if(OptionChanged(options[i], cmd.options[i])) return false;
+            }
+
+            // All checks passed, command unchanged
+            return true;
+        }
         public async Task BuildCommands(DiscordSocketClient client, ulong guildId, bool forceUpdateCommands=false)
         {
             var guild = client.GetGuild(guildId);
@@ -83,7 +112,8 @@ namespace TalkingBot.Core
             foreach(var command in commands)
             {
                 if(!forceUpdateCommands && 
-                    existingCommands.ToList().Find(x => x.Name == command.name) is not null) {
+                    CommandExistsAndUnchanged(existingCommands, command)) 
+                {
                     Logger.Instance?.LogDebug($"Skipped '{command.name}' because it already exists in {guild.Name} ({guild.Id})");
                     continue;
                 }
