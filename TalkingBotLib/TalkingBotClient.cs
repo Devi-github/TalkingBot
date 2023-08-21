@@ -27,8 +27,8 @@ namespace TalkingBot
     {
         public const int APILevel = 1;
         public const int Branch = 3;
-        public const int Commit = 1;
-        public const int Tweak = 3;
+        public const int Commit = 2;
+        public const int Tweak = 0;
         public const bool IsBuilt = false;
 
         public static LavaNode? _lavaNode;

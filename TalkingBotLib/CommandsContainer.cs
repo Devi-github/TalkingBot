@@ -251,6 +251,12 @@ namespace TalkingBot
                         description = "Use current timestamp for an embed",
                         optionType = ApplicationCommandOptionType.Boolean,
                         isRequired = true
+                    },
+                    new() {
+                        name = "message",
+                        description = "Additional message to the embed",
+                        optionType = ApplicationCommandOptionType.String,
+                        isRequired = false
                     }
                 }
             });
@@ -370,6 +376,7 @@ namespace TalkingBot
             var imageURL = GetOptionDataFromOptionList(list, "image-url");
             var thumbnailURL = GetOptionDataFromOptionList(list, "thumbnail-url");
             var withTimestamp = GetOptionDataFromOptionList(list, "with-timestamp");
+            var message = GetOptionDataFromOptionList(list, "message");
 
             var embed = new EmbedBuilder();
 
@@ -392,9 +399,16 @@ namespace TalkingBot
             if(thumbnailURL != null) embed.WithThumbnailUrl((string)thumbnailURL.Value);
             if((bool)withTimestamp!.Value == true) embed.WithCurrentTimestamp();
 
+            string? msg;
+
+            if(message != null)
+                msg = (string)message.Value;
+            else
+                msg = null;
+            
             await RespondCommandAsync(command, 
                 new() { 
-                    message = "In development", embed = embed.Build() 
+                    message = msg, embed = embed.Build()
                 }
             );
         }
