@@ -1,0 +1,39 @@
+name: Debug Workflow
+# Includes docker push
+
+on:
+  push:
+    branches: [ "!main" ]
+
+jobs:
+  build_and_push_to_registry: # Builds and pushes Docker image to Dockerhub
+    name: Push Docker container to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3
+        
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Setup DockerX
+        uses: docker/setup-buildx-action@v2
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: pi4er/talkingbot
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ secrets.DOCKER_USERNAME }}/talkingbot:latest,${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
