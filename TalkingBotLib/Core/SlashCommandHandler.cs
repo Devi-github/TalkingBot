@@ -21,7 +21,7 @@ namespace TalkingBot.Core
         public ApplicationCommandOptionType optionType;
         public bool? isRequired;
         public bool? isDefault;
-        public bool isAutocomplete;
+        public bool? isAutocomplete;
         public double? minValue;
         public double? maxValue;
     }
@@ -70,9 +70,8 @@ namespace TalkingBot.Core
         }
         private static bool OptionChanged(RestApplicationCommandOption op1, SlashCommandOption op2) {
             return op1.Name != op2.name || op1.Description != op2.description
-                || op1.IsRequired != op2.isRequired || op1.Type != op2.optionType
-                || op1.IsDefault != op2.isDefault || op1.MinValue != op2.minValue
-                || op1.MaxValue != op2.maxValue || op1.IsAutocomplete != op2.isAutocomplete;
+                || op1.Type != op2.optionType || op1.MinValue != op2.minValue
+                || op1.MaxValue != op2.maxValue;
         }
         private static bool 
             CommandExistsAndUnchanged(
@@ -85,8 +84,11 @@ namespace TalkingBot.Core
             var options = restCommand.Options.ToList();
 
             // Check if option count changed
-            if(cmd.options == null && options.Count != 0) return false;
-            if(options.Count != cmd.options!.Count) return false;
+            if(cmd.options == null) {
+                if(options.Count != 0) return false;
+                else return true;
+            } else
+                if(options.Count != cmd.options.Count) return false;
 
             // Check if any option changed
             for(int i = 0; i < options.Count; i++) {
@@ -127,9 +129,10 @@ namespace TalkingBot.Core
                 {
                     foreach (var option in command.options)
                     {
+                        bool autocomplete = (option.isAutocomplete != null ? option.isAutocomplete.Value : false);
                         guildCommand.AddOption(option.name, option.optionType,
                             option.description, option.isRequired,
-                            option.isDefault, option.isAutocomplete,
+                            option.isDefault, autocomplete,
                             option.minValue, option.maxValue);
                     }
                 }
