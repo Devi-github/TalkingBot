@@ -25,10 +25,11 @@ namespace TalkingBot
 {
     public class TalkingBotClient : IDisposable
     {
-        public const int APILevel = 1;
-        public const int Branch = 5;
-        public const int Commit = 1;
-        public const int Tweak = 0;
+        public const int Major = 1;
+        public const int Minor = 6;
+        public const int Patch = 1;
+
+        // TODO: Change automatically when Release build
         public const bool IsBuilt = true;
 
         public static LavaNode? _lavaNode;
@@ -86,6 +87,7 @@ namespace TalkingBot
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.SlashCommandExecuted += _commandsHandler!.HandleCommands;
             _client.ButtonExecuted += _commandsHandler.HandleButtons;
+            _client.ShardDisconnected += OnShardDisconnect;
         }
 
         private void SetServices() {
@@ -117,7 +119,7 @@ namespace TalkingBot
 
         private async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
             if(user is not SocketGuildUser guildUser) return;
-            if(user.Id == _client!.CurrentUser.Id && newVs.VoiceChannel == null) {
+            if(guildUser.Id == _client!.CurrentUser.Id && newVs.VoiceChannel == null) {
                 var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
                 if(shard == null) {
                     Logger.Instance?.LogError("Shard doesn't exist for the guild. WTF");
@@ -144,8 +146,9 @@ namespace TalkingBot
                 }
             }
         }
-        private async Task OnBotDisconnect(Exception e, DiscordSocketClient shard) {
-            Logger.Instance?.LogError("Disconnected", e);
+        private async Task OnShardDisconnect(Exception e, DiscordSocketClient shard) {
+            Logger.Instance?.LogError("Disconnected, {}", e);
+            //Console.WriteLine("{0} {1} {2}", e.Message, e.InnerException, e.Data);
             await AudioManager.LeaveAsync(shard.Guilds.First());
         }
 
@@ -155,7 +158,6 @@ namespace TalkingBot
             await _client.StartAsync();
 
             Stopwatch sw = new();
-
 
             foreach(var shard in _client.Shards) {
                 while (shard.ConnectionState != ConnectionState.Connected) await Task.Delay(10);

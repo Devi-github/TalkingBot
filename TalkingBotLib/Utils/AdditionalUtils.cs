@@ -12,13 +12,12 @@ namespace TalkingBot.Utils {
             return success;
         }
         public static string GetVersion() {
-            int api = TalkingBotClient.APILevel;
-            int branch = TalkingBotClient.Branch;
-            int commit = TalkingBotClient.Commit;
-            int tweak = TalkingBotClient.Tweak;
+            int major = TalkingBotClient.Major;
+            int minor = TalkingBotClient.Minor;
+            int patch = TalkingBotClient.Patch;
             string built = TalkingBotClient.IsBuilt ? "" : "-prebuild";
 
-            return $"{api}.{branch}.{commit}.{tweak}{built}";
+            return $"{major}.{minor}.{patch}{built}";
         }
     }
 }
