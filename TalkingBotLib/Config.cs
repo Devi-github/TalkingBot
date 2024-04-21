@@ -10,6 +10,23 @@ namespace TalkingBot
 {
     public static class Config
     {
+        public static async Task CreateDefaultConfigNoIO(string cnfpath) {
+            TalkingBotConfig config = new() {
+                LavalinkHostname = "localhost",
+                LavalinkPort = 2333,
+                Token = "",
+                Guilds = [],
+                ForceUpdateCommands = false,
+                LogLevel = Microsoft.Extensions.Logging.LogLevel.Information
+            };
+            using (StreamWriter sw = new(cnfpath))
+            {
+                await sw.WriteAsync(JsonConvert.SerializeObject(config, Formatting.Indented));
+            }
+            Console.WriteLine($"Config successfully created at {cnfpath}. " +
+                $"You may edit some parameters there to your liking.");
+        }
+
         public static async Task CreateDefaultConfig(string cnfpath)
         {
             Console.WriteLine("Generating essential config...");
@@ -45,7 +62,7 @@ namespace TalkingBot
                 LavalinkHostname = "localhost",
                 LavalinkPort = 2333,
                 Token = token,
-                Guilds = guilds.ToArray(),
+                Guilds = [.. guilds],
                 ForceUpdateCommands = false,
                 LogLevel = Microsoft.Extensions.Logging.LogLevel.Information
             };
@@ -56,7 +73,6 @@ namespace TalkingBot
             }
             Console.WriteLine($"Config successfully created at {cnfpath}. " +
                 $"You may edit some parameters there to your liking.");
-            Thread.Sleep(2000); // for people to have time to see the message
         }
     }
 }
