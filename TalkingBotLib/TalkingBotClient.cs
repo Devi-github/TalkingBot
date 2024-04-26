@@ -26,8 +26,8 @@ namespace TalkingBot
     public class TalkingBotClient : IDisposable
     {
         public const int Major = 1;
-        public const int Minor = 6;
-        public const int Patch = 1;
+        public const int Minor = 7;
+        public const int Patch = 0;
 
         // TODO: Change automatically when Release build
         public const bool IsBuilt = true;
