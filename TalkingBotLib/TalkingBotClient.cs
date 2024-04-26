@@ -29,8 +29,11 @@ namespace TalkingBot
         public const int Minor = 7;
         public const int Patch = 0;
 
-        // TODO: Change automatically when Release build
+#if DEBUG
+        public const bool IsBuilt = false;
+#else
         public const bool IsBuilt = true;
+#endif
 
         public static LavaNode? _lavaNode;
         public static DiscordShardedClient? _client;
@@ -38,7 +41,7 @@ namespace TalkingBot
         private static TalkingBotConfig _talkingBotConfig;
         private static SlashCommandHandler? _commandsHandler;
 
-        [System.Serializable]
+        [Serializable]
         public struct CachedMessageRole {
             public ulong messageId;
             public ulong roleId;
