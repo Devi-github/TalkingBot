@@ -147,17 +147,30 @@ namespace TalkingBot.Core.Music
                 
                 LavaTrack track;
 
-                var search = await _lavaNode.SearchAsync(Uri.IsWellFormedUriString(query, UriKind.Absolute) ? 
-                    Victoria.Responses.Search.SearchType.Direct : 
-                    Victoria.Responses.Search.SearchType.YouTube, query);
+                var search_type = Victoria.Responses.Search.SearchType.SoundCloud;
+
+                if(Uri.IsWellFormedUriString(query, UriKind.Absolute)) {
+                    search_type = Victoria.Responses.Search.SearchType.Direct;
+                } else if(query.Contains("youtube.com")) {
+                    return new() { message = $"YouTube is not supported!", ephemeral = true };
+                }
+                // else if(query.Contains("soundcloud.com")) {
+                //     search_type = Victoria.Responses.Search.SearchType.SoundCloud;
+                // }
+
+                var search = await _lavaNode.SearchAsync(search_type, query);
 
                 if (search.Status == Victoria.Responses.Search.SearchStatus.NoMatches) 
                     return new() { message = $"Could not find anything for '{query}'", ephemeral = true };
+                else if(search.Status == Victoria.Responses.Search.SearchStatus.LoadFailed)
+                    return new() { message = $"Failed to load track with URL: '{query}'", ephemeral = true };
 
                 track = search.Tracks.FirstOrDefault()!;
-
-                string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
-
+                string? thumbnail = search_type switch
+                {
+                    Victoria.Responses.Search.SearchType.SoundCloud => await track.FetchArtworkAsync(),
+                    _ => null,
+                };
                 var durstr = track.Duration.ToString("c");
 
                 if (player.Track != null && player.PlayerState is PlayerState.Playing ||  player.PlayerState is PlayerState.Paused)
@@ -182,7 +195,7 @@ namespace TalkingBot.Core.Music
                 await player.PlayAsync(track);
                 await player.SeekAsync(timecode);
 
-                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(
+                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(
                     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
                 
                 var embed = new EmbedBuilder()
@@ -215,7 +228,7 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
 
-                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
@@ -239,7 +252,7 @@ namespace TalkingBot.Core.Music
                 await player.StopAsync();
                 player.Vueue.Clear();
 
-                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
@@ -340,7 +353,7 @@ namespace TalkingBot.Core.Music
                 
                 await player.SkipAsync();
 
-                await TalkingBotClient._client.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
+                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
                     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
                 
                 string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
@@ -494,7 +507,7 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 Logger.Instance?.LogDebug("Queue finished!");
-                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if(isOnLoop && (loopRemaining == -1 || loopRemaining > 0)) { // do loop
@@ -508,7 +521,7 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 Logger.Instance?.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
-                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if (!(queueable is LavaTrack track))
@@ -516,7 +529,7 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 Logger.Instance?.LogWarning($"Next item in queue is not a track");
-                await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
 
@@ -524,7 +537,7 @@ namespace TalkingBot.Core.Music
 
             await arg.Player.PlayAsync(track);
 
-            await TalkingBotClient._client.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game(track.Title, 
+            await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game(track.Title, 
                 ActivityType.Listening, ActivityProperties.Join, track.Url));
 
             string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
