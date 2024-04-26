@@ -5,8 +5,8 @@ on:
   push:
     branches: 
       - "*"
-      - "!master"
-      - "!master"
+      - "!main"
+      - "!main"
   pull_request:
     branches:
       - "*"
