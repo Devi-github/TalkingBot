@@ -413,11 +413,11 @@ namespace TalkingBot
             );
         }
         private static async Task GetLen(SocketSlashCommand command) {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, AudioManager.GetLength(guild));
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, await AudioManager.GetLength(guild));
         }
         private static async Task GotoFunc(SocketSlashCommand command) {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             var optionList = GetListOfOptionsFromCommand(command);
             string timecodeStr = (string)GetOptionDataFromOptionList(optionList, "timecode")!.Value;
             bool success = AdditionalUtils.TryParseTimecode(timecodeStr, out double seconds);
@@ -431,13 +431,13 @@ namespace TalkingBot
         {
             var optionList = GetListOfOptionsFromCommand(command);
             long volume = (long)GetOptionDataFromOptionList(optionList, "volume")!.Value;
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
 
             await RespondCommandAsync(command, await AudioManager.ChangeVolume(guild, (int)volume));
         }
         private static async Task JoinChannel(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.JoinAsync(guild, command.User as IVoiceState, 
                 command.Channel as ITextChannel));
         }
@@ -465,27 +465,27 @@ namespace TalkingBot
         {
             var optionList = GetListOfOptionsFromCommand(command);
             long index = (long)GetOptionDataFromOptionList(optionList, "remove")!.Value;
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, AudioManager.RemoveTrack(guild, index));
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, await AudioManager.RemoveTrack(guild, index));
         }
         private static async Task Leave(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.LeaveAsync(guild));
         }
         private static async Task Pause(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.PauseAsync(guild));
         }
         private static async Task Unpause(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.ResumeAsync(guild));
         }
         private static async Task Stop(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.StopAsync(guild));
         }
         private static async Task Roll(SocketSlashCommand command)
@@ -502,26 +502,26 @@ namespace TalkingBot
         }
         private static async Task Skip(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             await RespondCommandAsync(command, await AudioManager.SkipAsync(guild));
         }
         private static async Task Queue(SocketSlashCommand command)
         {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, AudioManager.GetQueue(guild));
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, await AudioManager.GetQueue(guild));
         }
         private static async Task GetPosition(SocketSlashCommand command) {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
-            await RespondCommandAsync(command, AudioManager.GetCurrentPosition(guild));
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
+            await RespondCommandAsync(command, await AudioManager.GetCurrentPosition(guild));
         }
         private static async Task Loop(SocketSlashCommand command) {
-            var guild = TalkingBotClient._client.GetGuild(command.GuildId!.Value);
+            var guild = TalkingBotClient._client!.GetGuild(command.GuildId!.Value);
             int times = -1;
             var optionList = GetListOfOptionsFromCommand(command);
             var times_data = GetOptionDataFromOptionList(optionList, "times");
             if(times_data != null)
                 times = Convert.ToInt32(times_data.Value);
-            await RespondCommandAsync(command, AudioManager.SetLoop(guild, times));
+            await RespondCommandAsync(command, await AudioManager.SetLoop(guild, times));
         }
 #endregion
     }

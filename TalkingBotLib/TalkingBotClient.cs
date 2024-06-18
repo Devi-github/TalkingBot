@@ -11,8 +11,6 @@ using System.Text;
 using System.Threading.Tasks;
 using TalkingBot.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Victoria.Player;
-using Victoria.Node;
 using Victoria;
 using TalkingBot.Utils;
 using TalkingBot.Core.Logging;
@@ -20,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using TalkingBot.Core.Music;
 using TalkingBot.Core.Caching;
+using Discord.Rest;
 
 namespace TalkingBot
 {
@@ -99,22 +98,21 @@ namespace TalkingBot
             collection.AddSingleton<AudioManager>();
             collection.AddSingleton(_commandsHandler!);
 
-            LavaLogger logger = new LavaLogger(LogLevel.Information);
+            LavaLogger logger = new(LogLevel.Information);
             collection.AddSingleton(logger);
 
-            _lavaNode = new(_client, new(){
-                Hostname = _talkingBotConfig.LavalinkHostname,
-                Port = (ushort)_talkingBotConfig.LavalinkPort,
-                Authorization = "youshallnotpass",
-                SelfDeaf = false,
-                SocketConfiguration = new() {
+            collection.AddLavaNode((cfg) => {
+                cfg.Hostname = _talkingBotConfig.LavalinkHostname;
+                cfg.Port = _talkingBotConfig.LavalinkPort;
+                cfg.Authorization = "youshallnotpass";
+                cfg.SelfDeaf = false;
+                cfg.SocketConfiguration = new() {
                     ReconnectAttempts = 3, 
-                    ReconnectDelay = TimeSpan.FromSeconds(5), 
+                    ReconnectDelay = 5, 
                     BufferSize = 1024
-                },
-                IsSecure = false
-            }, logger);
-            collection.AddSingleton(_lavaNode);
+                };
+                cfg.IsSecure = false;
+            });
             collection.AddSingleton(_message_cacher);
 
             ServiceManager.SetProvider(collection);
@@ -182,7 +180,8 @@ namespace TalkingBot
             }
             try
             {
-                await VictoriaExtensions.UseLavaNodeAsync(ServiceManager.ServiceProvider);
+                await ServiceManager.ServiceProvider.UseLavaNodeAsync();
+                //await VictoriaExtensions.UseLavaNodeAsync(ServiceManager.ServiceProvider);
             }
             catch (Exception ex)
             {
