@@ -10,7 +10,6 @@ using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using Discord;
 using Discord.WebSocket;
-using TalkingBot.Core.Logging;
 using Microsoft.Extensions.Logging;
 using TalkingBot.Utils;
 using Victoria.WebSocket.EventArgs;
@@ -19,16 +18,20 @@ namespace TalkingBot.Core.Music
 {
     public class AudioManager
     {
-        private static LavaNode _lavaNode;
-        private static ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
-        public static HashSet<ulong> VoteQueue;
-        static AudioManager() 
-        { 
-            _lavaNode = ServiceManager.ServiceProvider.GetRequiredService<LavaNode>();
+        private DiscordSocketClient _client;
+        private LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
+        private ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
+        private ILogger<AudioManager> _logger;
+        public HashSet<ulong> VoteQueue;
+        public AudioManager() 
+        {
+            _client = ServiceManager.GetService<DiscordSocketClient>();
+            _lavaNode = ServiceManager.GetService<LavaNode<LavaPlayer<LavaTrack>, LavaTrack>>();
+            _logger = ServiceManager.GetService<ILogger<AudioManager>>();
 
             _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
             
-            VoteQueue = new HashSet<ulong>();
+            VoteQueue = [];
 
             _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStart += OnTrackStartAsync;
@@ -44,12 +47,12 @@ namespace TalkingBot.Core.Music
             return new() { message = "Music service is now unavailable! Contact administrator if you have any questions.", ephemeral = true };
         }
 
-        public static async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState, ITextChannel channel)
+        public async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState, ITextChannel channel)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             // if(_lavaNode.HasPlayer(guild))
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
-            if(player is null)
+            if(player is not null)
                 return new() { message = "I am already connected to a vc", ephemeral = true };
             
             if (voiceState.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
@@ -62,7 +65,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
-        public static async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
+        public async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
             if (player is null) return new() { message = "Not connected to any voice!", ephemeral = true };
@@ -91,7 +94,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> SetLoop(IGuild guild, int times) {
+        public async Task<InteractionResponse> SetLoop(IGuild guild, int times) {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
             if (player is null) return new() { message = "Not connected to any voice!", ephemeral = true };
@@ -99,7 +102,7 @@ namespace TalkingBot.Core.Music
             if(times == 0 || times < -1) return new() { message = "Cannot loop negative or zero times", ephemeral = true };
 
             try {
-                if (!player.IsPaused) return new() {
+                if (!player.State.IsConnected || player.Track is null) return new() {
                     message = "Music is not playing. To loop, play something first",
                     ephemeral = true
                 };
@@ -119,7 +122,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, 
+        public async Task<InteractionResponse> PlayAsync(SocketGuildUser user, 
             ITextChannel channel, IGuild guild, string query, double seconds=0)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
@@ -143,8 +146,11 @@ namespace TalkingBot.Core.Music
                 
                 LavaTrack track;
 
-                
                 var trackSearchResponse = await _lavaNode.LoadTrackAsync(query);
+                
+                if(trackSearchResponse.Type is Victoria.Rest.Search.SearchType.Empty or Victoria.Rest.Search.SearchType.Error) {
+                    return new() { message = "Couldn't find anything.", ephemeral = true };
+                }
 
                 track = trackSearchResponse.Tracks.FirstOrDefault()!;
                 string? thumbnail = track.Artwork;
@@ -171,10 +177,10 @@ namespace TalkingBot.Core.Music
                 if(track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
 
                 await player.PlayAsync(_lavaNode, track);
-                await player.SeekAsync(_lavaNode, timecode);
-
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(
-                    new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+                // await player.SeekAsync(_lavaNode, timecode);
+                
+                // await _client.GetShardFor(guild).SetActivityAsync(
+                //     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
                 
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
@@ -192,24 +198,26 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> LeaveAsync(IGuild guild)
+        public async Task<InteractionResponse> LeaveAsync(IVoiceState voiceState, IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
 
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
             if (player is null) return new() { message = "Not connected to any voice!", ephemeral = true };
             
+            // if(voiceState is null) return new() { message = "Can't leave the voice i am not in", ephemeral = true };
+
             try
             {
                 if (player.Track is not null)
-                    await player.StopAsync(_lavaNode, player.Track);
-                throw new NotImplementedException("Implement LeaveAsync");
-                // await _lavaNode.LeaveAsync(player.VoiceState); // TODO:
+                    await StopAsync(guild);
+                await _lavaNode.LeaveAsync(voiceState.VoiceChannel);
+                // throw new NotImplementedException("Implement LeaveAsync");
 
                 loopRemaining = 0;
                 isOnLoop = false;
 
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
@@ -217,7 +225,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> StopAsync(IGuild guild)
+        public async Task<InteractionResponse> StopAsync(IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -231,7 +239,7 @@ namespace TalkingBot.Core.Music
                 await player.StopAsync(_lavaNode, player.Track);
                 player.GetQueue().Clear();
 
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
@@ -240,7 +248,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> PauseAsync(IGuild guild)
+        public async Task<InteractionResponse> PauseAsync(IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -262,7 +270,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> ResumeAsync(IGuild guild)
+        public async Task<InteractionResponse> ResumeAsync(IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -284,7 +292,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> RemoveTrack(IGuild guild, long index)
+        public async Task<InteractionResponse> RemoveTrack(IGuild guild, long index)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -292,13 +300,22 @@ namespace TalkingBot.Core.Music
 
             try
             {
+                LavaTrack trackRemoved;
+
+                // Remove last
+                if(index == -1) {
+                    trackRemoved = player.GetQueue().Last();
+                    player.GetQueue().Remove(trackRemoved);
+                    return new() { message = $"Removed the track **{trackRemoved.Title}**" };
+                }
+
                 if (index - 1 < 0 || index > player.GetQueue().Count) return new() 
                 { 
                     message = $"Index is not present inside the Queue. Enter values from (1 to {player.GetQueue().Count})",
                     ephemeral = true 
                 };
 
-                var trackRemoved = player.GetQueue().RemoveAt((int)(index - 1));
+                trackRemoved = player.GetQueue().RemoveAt((int)(index - 1));
 
                 return new() { message = $"Removed the track **{trackRemoved.Title}**" };
             }
@@ -307,7 +324,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> SkipAsync(IGuild guild)
+        public async Task<InteractionResponse> SkipAsync(IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -325,8 +342,8 @@ namespace TalkingBot.Core.Music
                 
                 await player.SkipAsync(_lavaNode);
 
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
-                    new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
+                // await _client.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
+                //     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
                 
                 string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
 
@@ -346,7 +363,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> GetCurrentPosition(IGuild guild) {
+        public async Task<InteractionResponse> GetCurrentPosition(IGuild guild) {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
             if (player is null) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
@@ -363,7 +380,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{ex.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> GetQueue(IGuild guild)
+        public async Task<InteractionResponse> GetQueue(IGuild guild)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -394,7 +411,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> GetLength(IGuild guild) {
+        public async Task<InteractionResponse> GetLength(IGuild guild) {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
             if (player is null) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
@@ -416,7 +433,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
+        public async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailed();
             var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
@@ -435,41 +452,41 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        private static async Task OnTrackExceptionAsync(TrackExceptionEventArg arg)
+        private async Task OnTrackExceptionAsync(TrackExceptionEventArg arg)
         {
             var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
             player.GetQueue().Enqueue(arg.Track);
             // await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it threw an exception."); // TODO
         }
-        private static async Task OnTrackStuckAsync(TrackStuckEventArg arg)
+        private async Task OnTrackStuckAsync(TrackStuckEventArg arg)
         {
             // var guild = TalkingBotClient._client!.GetGuild(arg.GuildId);
             var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
             player.GetQueue().Enqueue(arg.Track);
             // await player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it got stuck."); // TODO
         }
-        private static Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
+        private Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
         {
-            Logger.Instance?.LogError($"{arg.Code} {arg.Reason}");
+            _logger.LogError($"{arg.Code} {arg.Reason}");
             return Task.CompletedTask;
         }
-        public static Task OnTrackStartAsync(TrackStartEventArg arg) {
+        public Task OnTrackStartAsync(TrackStartEventArg arg) {
             
             return Task.CompletedTask;
         }
-        public static async Task OnTrackEndAsync(TrackEndEventArg arg)
+        public async Task OnTrackEndAsync(TrackEndEventArg arg)
         {
-            var guild = TalkingBotClient._client!.GetGuild(arg.GuildId);
+            var guild = _client.GetGuild(arg.GuildId);
             var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
-            Logger.Instance?.LogDebug("Track ended!");
+            _logger.LogDebug("Track ended!");
             if (arg.Reason != Victoria.Enums.TrackEndReason.Finished)
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogDebug("Queue finished!");
+                _logger.LogDebug("Queue finished!");
                 
-                var shard = TalkingBotClient._client!.GetShardFor(guild);
-                await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                // var shard = _client.GetShardFor(guild);
+                // await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 
                 return;
             }
@@ -483,27 +500,27 @@ namespace TalkingBot.Core.Music
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
-                await TalkingBotClient._client!.GetShardFor(guild)
-                    .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                _logger.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
+                // await _client.GetShardFor(guild)
+                //     .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
             if (!(queueable is LavaTrack track))
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogWarning($"Next item in queue is not a track");
-                await TalkingBotClient._client!.GetShardFor(guild)
-                    .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                _logger.LogWarning($"Next item in queue is not a track");
+                // await _client.GetShardFor(guild)
+                //     .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
                 return;
             }
 
-            Logger.Instance?.LogDebug("Trying to play a new track!");
+            _logger.LogDebug("Trying to play a new track!");
 
             await player.PlayAsync(_lavaNode, track);
 
-            await TalkingBotClient._client!.GetShardFor(guild)
-                .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            // await _client.GetShardFor(guild)
+            //     .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
 
             string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
             var durstr = track.Duration.ToString("c");

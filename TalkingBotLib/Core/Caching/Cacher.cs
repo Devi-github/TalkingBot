@@ -1,7 +1,6 @@
 using System;
 using Discord.Net;
 using Newtonsoft.Json;
-using TalkingBot.Core.Logging;
 using System.IO;
 
 namespace TalkingBot.Core.Caching {

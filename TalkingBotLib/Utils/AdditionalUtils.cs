@@ -11,7 +11,7 @@ namespace TalkingBot.Utils {
             result = mins * 60 + secs;
             return success;
         }
-        public static string GetVersion() {
+        public static string GetVersionString() {
             int major = TalkingBotClient.Major;
             int minor = TalkingBotClient.Minor;
             int patch = TalkingBotClient.Patch;

@@ -45,7 +45,6 @@ namespace TalkingBotMain
 
             Console.CancelKeyPress += delegate
             {
-                client.Dispose();
                 Environment.Exit(0);
             };
 
