@@ -53,6 +53,12 @@ public class CommandHandlerService {
             var context = new SocketInteractionContext(_client, interaction);
             var result = await _interactions.ExecuteCommandAsync(context, ServiceManager.ServiceProvider);
 
+            // TODO: Fix the 'unknown'
+            _logger.LogDebug("Executed '{}' command. {}",
+                "unknown",
+                result.IsSuccess ? "Success" : "Failure"
+            );
+
             if(!result.IsSuccess) {
                 await context.Channel.SendMessageAsync(result.ToString(), flags: MessageFlags.Ephemeral);
             }

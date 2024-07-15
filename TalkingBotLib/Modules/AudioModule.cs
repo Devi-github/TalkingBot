@@ -1,5 +1,4 @@
 using Discord;
-using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +38,7 @@ public class AudioModule(
     }
 
     [SlashCommand("play", "TODO")]
-    public async Task PlayAsync([Remainder] string query, [Remainder] string timeCode="0:00") {
+    public async Task PlayAsync(string query, string timeCode="0:00") {
         if(string.IsNullOrEmpty(query)) {
             await ReplyAsync("Provide search query");
             return;
@@ -50,8 +49,10 @@ public class AudioModule(
             return;
         }
 
+        var user = Context.User as IGuildUser;
+
         await RespondCommandAsync(await audioManager.PlayAsync(
-            Context.User as SocketGuildUser, null, Context.Guild, query, secs));
+            user!, null, Context.Guild, query, secs));
     }
 
     [SlashCommand("stop", "TODO")]
@@ -76,7 +77,7 @@ public class AudioModule(
 
     [SlashCommand("leave", "TODO")]
     public async Task LeaveAsync() {
-        IVoiceState voiceState = Context.User as IVoiceState;
+        IVoiceState? voiceState = Context.User as IVoiceState;
         await RespondCommandAsync(await audioManager.LeaveAsync(voiceState!, Context.Guild));
     }
 
@@ -101,7 +102,7 @@ public class AudioModule(
     }
     
     [SlashCommand("goto", "TODO")]
-    public async Task GoToAsync(string timeCode) {
+    public async Task GoToAsync([Summary("timeCode", "Time code to seek to. Example: 1:23")] string timeCode) {
         if(!AdditionalUtils.TryParseTimecode(timeCode, out double secs)) {
             await RespondCommandAsync(new() {message = "Failed to parse timecode! Format for the timecode is: 0:00", ephemeral = true});
             return;
@@ -114,7 +115,7 @@ public class AudioModule(
         await RespondCommandAsync(await audioManager.GetQueue(Context.Guild));
     }
 
-    [Command("remove")]
+    [SlashCommand("remove", "TODO")]
     public async Task RemoveSongAsync(long index=-1) {
         await RespondCommandAsync(await audioManager.RemoveTrack(Context.Guild, index));
     }
