@@ -34,10 +34,10 @@ namespace TalkingBot.Core.Music
             VoteQueue = [];
 
             _lavaNode.OnTrackEnd += OnTrackEndAsync;
-            // _lavaNode.OnTrackStart += OnTrackStartAsync;
-            // _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
-            // _lavaNode.OnTrackStuck += OnTrackStuckAsync;
-            // _lavaNode.OnTrackException += OnTrackExceptionAsync;
+            _lavaNode.OnTrackStart += OnTrackStartAsync;
+            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
+            _lavaNode.OnTrackStuck += OnTrackStuckAsync;
+            _lavaNode.OnTrackException += OnTrackExceptionAsync;
         }
 
         private static bool isOnLoop = false;
