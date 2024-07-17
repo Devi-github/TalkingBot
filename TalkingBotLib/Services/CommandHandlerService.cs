@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using TalkingBot.Core;
 using TalkingBot.Modules;
 
-namespace TalkingBot;
+namespace TalkingBot.Services;
 
 public class CommandHandlerService {
     private readonly InteractionService _interactions;
@@ -30,6 +30,7 @@ public class CommandHandlerService {
         
         await _interactions.AddModuleAsync<BotModule>(ServiceManager.ServiceProvider);
         await _interactions.AddModuleAsync<AudioModule>(ServiceManager.ServiceProvider);
+        await _interactions.AddModuleAsync<ButtonHandlerModule>(ServiceManager.ServiceProvider);
 
         _logger.LogInformation("Loaded interaction modules: {} modules", _interactions.Modules.Count);
 
@@ -45,19 +46,19 @@ public class CommandHandlerService {
                 );
             }
         };
+        _client.ButtonExecuted += ButtonExecutedAsync;
         _client.InteractionCreated += InteractionExecutedAsync;
     }
     
+    public async Task ButtonExecutedAsync(SocketMessageComponent interaction) {
+        var ctx = new SocketInteractionContext<SocketMessageComponent>(_client, interaction);
+        await _interactions.ExecuteCommandAsync(ctx, ServiceManager.ServiceProvider);
+    }
+
     public async Task InteractionExecutedAsync(SocketInteraction interaction) {
         try {
             var context = new SocketInteractionContext(_client, interaction);
             var result = await _interactions.ExecuteCommandAsync(context, ServiceManager.ServiceProvider);
-
-            // TODO: Fix the 'unknown'
-            _logger.LogDebug("Executed '{}' command. {}",
-                "unknown",
-                result.IsSuccess ? "Success" : "Failure"
-            );
 
             if(!result.IsSuccess) {
                 await context.Channel.SendMessageAsync(result.ToString(), flags: MessageFlags.Ephemeral);

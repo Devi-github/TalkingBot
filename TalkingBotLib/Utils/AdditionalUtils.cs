@@ -1,3 +1,5 @@
+using System.Drawing;
+
 namespace TalkingBot.Utils {
     public static class AdditionalUtils {
         public static bool TryParseTimecode(string timecode, out double result) {
@@ -18,6 +20,15 @@ namespace TalkingBot.Utils {
             string built = TalkingBotClient.IsBuilt ? "" : "-prebuild";
 
             return $"{major}.{minor}.{patch}{built}";
+        }
+        public static Discord.Color? ParseColorFromString(string? color) {
+            if(color is null) return null;
+            
+            var conv = new ColorConverter();
+            var result = (Color?)conv.ConvertFromString(color);
+            if(result is null) return null;
+
+            return new(result.Value.R, result.Value.G, result.Value.B);
         }
     }
 }

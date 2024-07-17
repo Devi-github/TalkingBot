@@ -43,10 +43,10 @@ namespace TalkingBot.Core.Music
         private static bool isOnLoop = false;
         private static int loopRemaining = 0;
 
-        public async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState, ITextChannel channel)
+        public async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
-            // if(_lavaNode.HasPlayer(guild))
+
             if((await TryGetVoiceState(guild))?.VoiceChannel is not null)
                 return new() { message = "I am already connected to a vc", ephemeral = true };
             
@@ -128,7 +128,7 @@ namespace TalkingBot.Core.Music
             }
         }
         public async Task<InteractionResponse> PlayAsync(IGuildUser user, 
-            ITextChannel channel, IGuild guild, string query, double seconds=0)
+            IGuild guild, string query, double seconds=0)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };

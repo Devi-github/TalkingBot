@@ -20,6 +20,7 @@ using TalkingBot.Core.Music;
 using TalkingBot.Core.Caching;
 using Discord.Rest;
 using TalkingBot.Modules;
+using TalkingBot.Services;
 
 namespace TalkingBot
 {
@@ -44,15 +45,6 @@ namespace TalkingBot
         private ILogger<DiscordSocketClient> _logger;
 
         // private static SlashCommandHandler? _commandsHandler;
-
-        [Serializable]
-        public struct CachedMessageRole {
-            public ulong messageId;
-            public ulong roleId;
-        }
-
-        public static List<CachedMessageRole> _cached_message_role = [];
-        private static Cacher<CachedMessageRole> _message_cacher = new();
 
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
@@ -79,10 +71,6 @@ namespace TalkingBot
             _commandService = ServiceManager.GetService<CommandHandlerService>();
 
             SetEvents();
-        }
-
-        public static void SaveCache() {
-            _message_cacher.SaveCached(nameof(CachedMessageRole), [.. _cached_message_role]);
         }
 
         private async Task Ready() {
@@ -114,6 +102,7 @@ namespace TalkingBot
                 .AddSingleton(_talkingBotConfig)
                 .AddSingleton(client)
                 .AddSingleton(interactionService)
+                .AddSingleton<MessageCacher>()
                 .AddSingleton<AudioManager>()
                 .AddTransient<AudioModule>()
                 .AddTransient<BotModule>()
@@ -132,48 +121,38 @@ namespace TalkingBot
                         },
                         IsSecure = false
                     };
-                })
-                .AddSingleton(_message_cacher);
+                });
 
             ServiceManager.SetProvider(collection);
         }
 
         private async Task OnUserVoiceUpdate(SocketUser user, SocketVoiceState prevVs, SocketVoiceState newVs) {
-            // if(user is not SocketGuildUser guildUser) return;
-            // if(guildUser.Id == _client!.CurrentUser.Id && newVs.VoiceChannel == null) {
-            //     var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
-            //     if(shard == null) {
-            //         _logger.LogError("Shard doesn't exist for the guild. WTF");
-            //         return;
-            //     }
-            //     _logger.LogDebug("Bot was disconnected from the voice");
-            //     var voiceState = shard.Guilds.First().CurrentUser as IVoiceState;
-            //     await _audioManager.LeaveAsync(voiceState, shard.Guilds.First());
-            // }
+            if(user is not SocketGuildUser guildUser) return;
+            var guild = guildUser.Guild;
+            if(guildUser.Id == _client!.CurrentUser.Id && newVs.VoiceChannel == null) {
+                _logger.LogDebug("Bot was disconnected from the voice");
+                var voiceState = guild.CurrentUser as IVoiceState;
+                await _audioManager.LeaveAsync(voiceState, guild);
+            }
             
-            // SocketVoiceChannel channel = prevVs.VoiceChannel;
+            SocketVoiceChannel channel = prevVs.VoiceChannel;
 
-            // if(channel != null) {
-            //     var shard = _client.GetShardFor(prevVs.VoiceChannel.Guild);
+            if(channel is not null) {
+                var usr = guild.CurrentUser;
+                if(usr is null) return;
 
-            //     if(shard != null) {
-            //         var usr = shard.Guilds.First().GetUser(shard.CurrentUser.Id);
-            //         if(usr == null) return;
-
-            //         var users = channel.ConnectedUsers;
-            //         if(usr.VoiceChannel != null && usr.VoiceChannel.Id == channel.Id && users.Count == 1) {
-            //             _logger.LogDebug("Bot was disconnected from the voice");
-            //             var voiceState = shard.Guilds.First().CurrentUser as IVoiceState;
-            //             await _audioManager.LeaveAsync(voiceState, shard.Guilds.First());
-            //         }
-            //     }
-            // }
+                var users = channel.ConnectedUsers;
+                if(usr.VoiceChannel != null && usr.VoiceChannel.Id == channel.Id && users.Count == 1) {
+                    _logger.LogDebug("Bot was disconnected from the voice");
+                    var voiceState = usr as IVoiceState;
+                    await _audioManager.LeaveAsync(voiceState, guild);
+                }
+            }
         }
         private async Task OnDisconnect(Exception e) {
-            _logger.LogError("Disconnected, {}", e);
+            _logger.LogError("Disconnected from gateway, {}", e);
 
-            // var voiceState = shard.Guilds.First().CurrentUser as IVoiceState;
-            // await _audioManager.LeaveAsync(voiceState, shard.Guilds.First());
+            await Task.Delay(1);
         }
 
         public async Task Run()
