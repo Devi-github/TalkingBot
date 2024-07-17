@@ -10,14 +10,17 @@ namespace TalkingBot.Core
     /// <summary>
     /// Maybe unused
     /// </summary>
-    public class ServiceManager
+    public static class ServiceManager
     {
-        public static IServiceProvider ServiceProvider { get; private set; }
+        public static IServiceProvider? ServiceProvider { get; private set; }
 
-        public static void SetProvider(ServiceCollection collection)
+        public static void SetProvider(IServiceCollection collection)
             => ServiceProvider = collection.BuildServiceProvider();
 
-        public static T GetService<T>() where T : new()
-            => ServiceProvider.GetRequiredService<T>();
+        public static T GetService<T>() where T : notnull {
+            if(ServiceProvider is null) 
+                throw new Exception("ServiceProvider was not set before requesting service");
+            return ServiceProvider.GetRequiredService<T>();
+        }
     }
 }
