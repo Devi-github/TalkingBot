@@ -97,7 +97,7 @@ namespace TalkingBot
                 .AddLogging(x => {
                     x.ClearProviders();
                     x.AddConsole();
-                    x.SetMinimumLevel(LogLevel.Trace);
+                    x.SetMinimumLevel(_talkingBotConfig.LogLevel);
                 })
                 .AddSingleton(_talkingBotConfig)
                 .AddSingleton(client)
