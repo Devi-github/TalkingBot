@@ -21,21 +21,23 @@ public class ButtonHandlerModule(
             .GetRole(cacher.CachedMessages.FirstOrDefault(x => x.messageId == messageId).roleId);
         
         if(role is null) {
+            logger.LogError("Error when giving role: role was null. Probably cache outdated " +
+                "or was unable to be loaded properly.");
             await RespondAsync("Failed to give a role. Ask administrator to "+
-                "fix this problem.");
+                "fix this problem.", ephemeral: true);
             return;
         }
         
         try {
             await user!.AddRoleAsync(role);
         } catch(Exception) {
-            await RespondAsync("Error occured while giving role. "+
-                "Probably the bot doesn't have enough permissions. Ask administrator "+
+            await RespondAsync("Error occured while giving role. " +
+                "Probably the bot doesn't have enough permissions. Ask administrator " +
                 "if you think this problem shouldn't exist.", ephemeral: true);
             return;
         }
 
-        await RespondAsync($"You successfully got the role {role.Name}!", ephemeral: true);
+        await RespondAsync($"You successfully got the role `{role.Name}`!", ephemeral: true);
 
         logger.LogDebug("{} executed AddRoleButton", user.DisplayName);
     }

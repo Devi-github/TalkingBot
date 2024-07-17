@@ -18,18 +18,16 @@ namespace TalkingBot.Core.Music
 {
     public class AudioManager
     {
-        private DiscordSocketClient _client;
         private LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
-        private ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
         private ILogger<AudioManager> _logger;
         public HashSet<ulong> VoteQueue;
-        public AudioManager() 
-        {
-            _client = ServiceManager.GetService<DiscordSocketClient>();
-            _lavaNode = ServiceManager.GetService<LavaNode<LavaPlayer<LavaTrack>, LavaTrack>>();
-            _logger = ServiceManager.GetService<ILogger<AudioManager>>();
-
-            _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
+        
+        public AudioManager(
+            LavaNode<LavaPlayer<LavaTrack>, LavaTrack> lavaNode,
+            ILogger<AudioManager> logger
+        ) {
+            _lavaNode = lavaNode;
+            _logger = logger;
             
             VoteQueue = [];
 
@@ -57,6 +55,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"Connected to a {voiceState.VoiceChannel.Name}" };
             } catch(Exception ex)
             {
+                _logger.LogError(exception: ex, "Error was thrown.");
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
@@ -95,6 +94,7 @@ namespace TalkingBot.Core.Music
                 };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
@@ -124,6 +124,7 @@ namespace TalkingBot.Core.Music
                 }
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -140,6 +141,7 @@ namespace TalkingBot.Core.Music
                     await _lavaNode.JoinAsync(user.VoiceChannel);
                 } catch(Exception ex)
                 {
+                    _logger.LogError(exception: ex, "Error was thrown.");
                     return new() { message = $"Error\n{ex.Message}", ephemeral = true };
                 }
             }
@@ -199,6 +201,7 @@ namespace TalkingBot.Core.Music
                 return new() { embed = embed };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -225,6 +228,7 @@ namespace TalkingBot.Core.Music
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
@@ -249,6 +253,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -272,6 +277,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -295,6 +301,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -319,8 +326,8 @@ namespace TalkingBot.Core.Music
                 if (index - 1 < 0 || index > player.GetQueue().Count) return new() 
                 {
                     message = $"Index is not present inside the Queue."+
-                        " You can find specific index by entering `queue`",
-                    ephemeral = true 
+                        " You can find specific index by running `queue` command",
+                    ephemeral = true
                 };
 
                 trackRemoved = player.GetQueue().RemoveAt((int)(index - 1));
@@ -329,6 +336,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -371,6 +379,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -389,6 +398,7 @@ namespace TalkingBot.Core.Music
 
                 return new() { message = $"Current track position: **{curpos}**/{player.Track.Duration.ToString("c")}", ephemeral = true };
             } catch(Exception ex) {
+                _logger.LogError(exception: ex, "Error was thrown.");
                 return new() { message = $"Error\n{ex.Message}", ephemeral = true };
             }
         }
@@ -421,6 +431,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -444,6 +455,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
@@ -464,6 +476,7 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
