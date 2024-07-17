@@ -21,14 +21,24 @@ namespace TalkingBot.Utils {
 
             return $"{major}.{minor}.{patch}{built}";
         }
+
+        /// <summary>
+        /// Parses color from string of html hex format, like #00AA11
+        /// </summary>
+        /// <param name="color">Hex-format color string</param>
+        /// <returns>Color from string or null if failed</returns>
         public static Discord.Color? ParseColorFromString(string? color) {
             if(color is null) return null;
-            
-            var conv = new ColorConverter();
-            var result = (Color?)conv.ConvertFromString(color);
-            if(result is null) return null;
 
-            return new(result.Value.R, result.Value.G, result.Value.B);
+            Color result;
+
+            try {
+                result = ColorTranslator.FromHtml(color);
+            } catch {
+                return null;
+            }
+
+            return new(result.R, result.G, result.B);
         }
     }
 }

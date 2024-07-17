@@ -63,7 +63,11 @@ public class BotModule(
     }
 
     [SlashCommand("role-msg", "Creates a message to get a role")]
-    public async Task RoleMsg(IRole role, string message, string buttonLabel) {
+    public async Task RoleMsg(
+        [Summary("role", "Role to give")] IRole role,
+        [Summary("message", "Message to add button to")] string message,
+        [Summary("label", "Text on button")] string buttonLabel
+    ) {
         var author = Context.User as IGuildUser;
 
         string newmessage = message!.Replace("  ", "\n");
@@ -97,7 +101,7 @@ public class BotModule(
     public async Task BuildEmbedAsync(
         [Summary("title", "Title of an embed")] string title,
         [Summary("description", "Description of an embed")] string? _description=null,
-        [Summary("color", "NOT IMPLEMENTED! Color of an embed")] string? color=null,
+        [Summary("color", "Color of an embed in '#123456' format")] string? color=null,
         [Summary("imageUrl", "URL for an image in embed")] string? imageUrl=null,
         [Summary("thumbnailUrl", "URL for a thumbnail in embed")] string? thumbnailUrl=null,
         [Summary("withTimestamp", "Show timestamp for when embed was created")] bool withTimestamp=false,
@@ -110,7 +114,7 @@ public class BotModule(
         if(color is not null) {
             Color? colorStruct = AdditionalUtils.ParseColorFromString(color);
 
-            embed = colorStruct is null ? embed.WithColor(colorStruct!.Value) : embed;
+            embed = colorStruct is not null ? embed.WithColor(colorStruct.Value) : embed;
         }
         embed = withTimestamp ? embed.WithTimestamp(DateTime.Now) : embed;
         embed = imageUrl is not null ? embed.WithImageUrl(imageUrl) : embed;

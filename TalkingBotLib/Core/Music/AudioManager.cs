@@ -317,8 +317,9 @@ namespace TalkingBot.Core.Music
                 }
 
                 if (index - 1 < 0 || index > player.GetQueue().Count) return new() 
-                { 
-                    message = $"Index is not present inside the Queue. Enter values from (1 to {player.GetQueue().Count})",
+                {
+                    message = $"Index is not present inside the Queue."+
+                        " You can find specific index by entering `queue`",
                     ephemeral = true 
                 };
 
