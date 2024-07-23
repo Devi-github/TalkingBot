@@ -24,6 +24,7 @@ using TalkingBot.Services;
 
 namespace TalkingBot
 {
+    using DiscordClient = DiscordShardedClient;
     public class TalkingBotClient
     {
         public const int Major = 2;
@@ -37,14 +38,12 @@ namespace TalkingBot
 #endif
 
         public LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
-        public DiscordSocketClient _client;
+        public DiscordClient _client;
         private DiscordSocketConfig _config;
         private TalkingBotConfig _talkingBotConfig;
         private AudioManager _audioManager;
         private CommandHandlerService _commandService;
-        private ILogger<DiscordSocketClient> _logger;
-
-        // private static SlashCommandHandler? _commandsHandler;
+        private ILogger<DiscordClient> _logger;
 
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
@@ -64,8 +63,8 @@ namespace TalkingBot
 
             SetServices();
 
-            _client = ServiceManager.GetService<DiscordSocketClient>();
-            _logger = ServiceManager.GetService<ILogger<DiscordSocketClient>>();
+            _client = ServiceManager.GetService<DiscordClient>();
+            _logger = ServiceManager.GetService<ILogger<DiscordClient>>();
             _lavaNode = ServiceManager.GetService<LavaNode<LavaPlayer<LavaTrack>, LavaTrack>>();
             _audioManager = ServiceManager.GetService<AudioManager>();
             _commandService = ServiceManager.GetService<CommandHandlerService>();
@@ -73,24 +72,21 @@ namespace TalkingBot
             SetEvents();
         }
 
-        private async Task Ready() {
-            await ServiceManager.ServiceProvider.UseLavaNodeAsync();
-
-            _logger.LogInformation("Logged in as {}!", _client.CurrentUser.Username);
-        }
-
         private void SetEvents() {
             _client.Log += Log;
-            _client.Ready += Ready;
-            //_client.MessageUpdated += MessageUpdated;
+            _client.ShardReady += Ready;
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
-            // _client.SlashCommandExecuted += _commandsHandler!.HandleCommands;
-            // _client.ButtonExecuted += _commandsHandler.HandleButtons;
-            _client.Disconnected += OnDisconnect;
+            _client.ShardDisconnected += OnDisconnect;
+        }
+
+        private async Task Ready(DiscordSocketClient shard) {
+            await ServiceManager.ServiceProvider.UseLavaNodeAsync();
+
+            _logger.LogInformation("Logged in as a shard {}!", shard.CurrentUser.Username);
         }
 
         private void SetServices() {
-            DiscordSocketClient client = new(_config);
+            DiscordClient client = new(_config);
             InteractionService interactionService = new(client.Rest);
 
             var collection = new ServiceCollection()
@@ -149,8 +145,9 @@ namespace TalkingBot
                 }
             }
         }
-        private async Task OnDisconnect(Exception e) {
-            _logger.LogError("Disconnected from gateway, {}", e);
+        private async Task OnDisconnect(Exception e, DiscordSocketClient shard) {
+            _logger.LogError("Disconnected shard {} from gateway, {}", 
+                shard.CurrentUser.Username, e);
 
             await Task.Delay(1);
         }
