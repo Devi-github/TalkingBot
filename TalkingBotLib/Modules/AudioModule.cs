@@ -38,7 +38,8 @@ public class AudioModule(
     [SlashCommand("play", "Plays a track specified in query. Could be search in Soundcloud, or any link")]
     public async Task PlayAsync(
         [Summary("query", "Query to find or a URL")] string query,
-        [Summary("timeCode", "Time code to start playing from. Example: 1:23")] string timeCode="0:00"
+        [Summary("timeCode", "Time code to start playing from. Example: 1:23")] string timeCode="0:00",
+        [Summary("searchType", "Where to search for music (ignore if URL)")] SearchType searchType=SearchType.Soundcloud
         ) {
         if(string.IsNullOrEmpty(query)) {
             await ReplyAsync("Provide search query");
@@ -53,7 +54,7 @@ public class AudioModule(
         var user = Context.User as IGuildUser;
 
         await RespondCommandAsync(await audioManager.PlayAsync(
-            user!, Context.Guild, query, secs)
+            user!, Context.Guild, query, secs, searchType)
         );
     }
 

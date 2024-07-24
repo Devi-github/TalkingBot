@@ -14,10 +14,20 @@ using Microsoft.Extensions.Logging;
 using TalkingBot.Utils;
 using Victoria.WebSocket.EventArgs;
 using TalkingBot;
+using Discord.Interactions;
 
 namespace TalkingBot.Core.Music
 {
     using DiscordClient = DiscordShardedClient;
+
+    public enum SearchType {
+        [ChoiceDisplay("URL")]
+        None,
+        YouTube,
+        [ChoiceDisplay("SoundCloud")]
+        Soundcloud,
+    }
+
     public class AudioManager
     {
         private readonly DiscordClient _client;
@@ -132,7 +142,7 @@ namespace TalkingBot.Core.Music
             }
         }
         public async Task<InteractionResponse> PlayAsync(IGuildUser user, 
-            IGuild guild, string query, double seconds=0)
+            IGuild guild, string query, double seconds=0, SearchType searchType=SearchType.Soundcloud)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
@@ -155,7 +165,15 @@ namespace TalkingBot.Core.Music
                 
                 LavaTrack track;
 
-                var trackSearchResponse = await _lavaNode.LoadTrackAsync(query);
+                if(Uri.IsWellFormedUriString(query, UriKind.Absolute)) {
+                    searchType = SearchType.None;
+                }
+
+                var trackSearchResponse = await _lavaNode.LoadTrackAsync(searchType switch {
+                    SearchType.Soundcloud => $"scsearch:{query}",
+                    SearchType.YouTube => $"ytsearch:{query}",
+                    _ => query
+                });
                 
                 if(trackSearchResponse.Type is Victoria.Rest.Search.SearchType.Empty or Victoria.Rest.Search.SearchType.Error) {
                     return new() { message = "Couldn't find anything.", ephemeral = true };
