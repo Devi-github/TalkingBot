@@ -17,7 +17,6 @@ namespace TalkingBotMain
         private static async Task MainAsync(string[] args)
         {
             string cnfpath = "Config.json";
-            string jsonconfig = "";
             if(args.Length > 1) 
             {
                 int idx = Array.FindIndex(args, 0, args.Length, str => str == "-C");
@@ -36,7 +35,7 @@ namespace TalkingBotMain
                 Console.WriteLine("Config not found at: {0}\nCreating new one...", cnfpath);
                 await Config.CreateDefaultConfig(cnfpath);
             }
-            jsonconfig = File.ReadAllText(cnfpath);
+            string jsonconfig = File.ReadAllText(cnfpath);
             TalkingBotConfig config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig)!;
 
             Console.Clear();
@@ -45,7 +44,6 @@ namespace TalkingBotMain
 
             Console.CancelKeyPress += delegate
             {
-                client.Dispose();
                 Environment.Exit(0);
             };
 

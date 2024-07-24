@@ -6,104 +6,111 @@ using System.Text;
 using System.Threading.Tasks;
 using TalkingBot.Core;
 using Victoria;
-using Victoria.Node;
-using Victoria.Node.EventArgs;
-using Victoria.Player;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using Discord;
 using Discord.WebSocket;
-using TalkingBot.Core.Logging;
 using Microsoft.Extensions.Logging;
 using TalkingBot.Utils;
+using Victoria.WebSocket.EventArgs;
+using TalkingBot;
 
 namespace TalkingBot.Core.Music
 {
+    using DiscordClient = DiscordShardedClient;
     public class AudioManager
     {
-        private static LavaNode _lavaNode;
-        private static ConcurrentDictionary<ulong, CancellationTokenSource> _disconnectTokens;
-        public static HashSet<ulong> VoteQueue;
-        static AudioManager() 
-        { 
-            _lavaNode = ServiceManager.ServiceProvider.GetRequiredService<LavaNode>();
+        private readonly DiscordClient _client;
+        private readonly LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
+        private readonly ILogger<AudioManager> _logger;
+        
+        private bool isOnLoop = false;
+        private int loopRemaining = 0;
 
-            _disconnectTokens = new ConcurrentDictionary<ulong, CancellationTokenSource>();
-            
-            VoteQueue = new HashSet<ulong>();
+        public AudioManager(
+            LavaNode<LavaPlayer<LavaTrack>, LavaTrack> lavaNode,
+            ILogger<AudioManager> logger,
+            DiscordClient client
+        ) {
+            _lavaNode = lavaNode;
+            _logger = logger;
+            _client = client;
 
-            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStart += OnTrackStartAsync;
-            _lavaNode.OnStatsReceived += OnStatsReceivedAsync;
-            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
+            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStuck += OnTrackStuckAsync;
             _lavaNode.OnTrackException += OnTrackExceptionAsync;
-            _lavaNode.OnUpdateReceived += OnUpdateReceivedAsync;
+            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
         }
 
-        private static bool isOnLoop = false;
-        private static int loopRemaining = 0;
-
-        private static InteractionResponse LavalinkFailed() {
-            return new() { message = "Music service is now unavailable! Contact administrator if you have any questions.", ephemeral = true };
-        }
-
-        public static async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState, ITextChannel channel)
+        // TODO: rebuild interaction system to use contexts and use them directly
+        public async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if(_lavaNode.HasPlayer(guild))
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+
+            if((await TryGetVoiceState(guild))?.VoiceChannel is not null)
                 return new() { message = "I am already connected to a vc", ephemeral = true };
             
             if (voiceState.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
             try
             {
-                await _lavaNode.JoinAsync(voiceState.VoiceChannel, channel);
+                await _lavaNode.JoinAsync(voiceState.VoiceChannel);
                 return new() { message = $"Connected to a {voiceState.VoiceChannel.Name}" };
             } catch(Exception ex)
             {
+                _logger.LogError(exception: ex, "Error was thrown.");
                 return new() { message = $"Error\n{ex.Message}" , ephemeral = true};
             }
         }
-        public static async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
+        public async Task<InteractionResponse> GoToAsync(IGuild guild, double seconds) {
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out var player);
-                if (!success) throw new Exception("Player get failed. Probably not connected");
-                if(player.PlayerState is not PlayerState.Playing) 
+                if(player.Track is null) 
                     return new() {
                         message = "Bot is not playing! To go to a timestamp you have to have a song playing!",
                         ephemeral = true
                     };
-                if(!player.Track.CanSeek) return new() {
+                if(!player.Track.IsSeekable) return new() {
                     message = "Cannot go to any position on this track!",
                     ephemeral = true
                 };
 
+                // Bug when seeking doesn't allow timecodes of 0
+                // The payload sent becomes empty
+                // So there is this workaround
+                if(seconds == 0.0) {
+                    // This way something will be in the payload, tested 💯
+                    seconds = 0.001;
+                }
+
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
                 if(player.Track.Duration < timecode) return new() { message = "The timecode is outside of track's length!", ephemeral = true};
-                await player.SeekAsync(timecode);
+                _logger.LogDebug("Trying to seek to {} seconds", seconds);
+                await player.SeekAsync(_lavaNode, timecode);
 
                 return new() {
                     message = $"Skipped to {timecode.ToString("c")}"
                 };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
-        public static InteractionResponse SetLoop(IGuild guild, int times) {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
+        public async Task<InteractionResponse> SetLoop(IGuild guild, int times) {
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
             
             if(times == 0 || times < -1) return new() { message = "Cannot loop negative or zero times", ephemeral = true };
 
             try {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is not PlayerState.Playing) return new() {
+                if (!player.State.IsConnected || player.Track is null) return new() {
                     message = "Music is not playing. To loop, play something first",
                     ephemeral = true
                 };
@@ -120,62 +127,48 @@ namespace TalkingBot.Core.Music
                 }
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> PlayAsync(SocketGuildUser user, 
-            ITextChannel channel, IGuild guild, string query, double seconds=0)
+        public async Task<InteractionResponse> PlayAsync(IGuildUser user, 
+            IGuild guild, string query, double seconds=0)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
             if (user.VoiceChannel is null) return new() { message = "You must be connected to a vc", ephemeral = true };
 
-            if (!_lavaNode.HasPlayer(guild))
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
             {
                 try
                 {
-                    await _lavaNode.JoinAsync(user.VoiceChannel, channel);
+                    await _lavaNode.JoinAsync(user.VoiceChannel);
                 } catch(Exception ex)
                 {
+                    _logger.LogError(exception: ex, "Error was thrown.");
                     return new() { message = $"Error\n{ex.Message}", ephemeral = true };
                 }
             }
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
+                var player = await _lavaNode.GetPlayerAsync(guild.Id);
                 
                 LavaTrack track;
 
-                var search_type = Victoria.Responses.Search.SearchType.SoundCloud;
-
-                if(Uri.IsWellFormedUriString(query, UriKind.Absolute)) {
-                    search_type = Victoria.Responses.Search.SearchType.Direct;
-                } else if(query.Contains("youtube.com")) {
-                    return new() { message = $"YouTube is not supported!", ephemeral = true };
+                var trackSearchResponse = await _lavaNode.LoadTrackAsync(query);
+                
+                if(trackSearchResponse.Type is Victoria.Rest.Search.SearchType.Empty or Victoria.Rest.Search.SearchType.Error) {
+                    return new() { message = "Couldn't find anything.", ephemeral = true };
                 }
-                // else if(query.Contains("soundcloud.com")) {
-                //     search_type = Victoria.Responses.Search.SearchType.SoundCloud;
-                // }
 
-                var search = await _lavaNode.SearchAsync(search_type, query);
-
-                if (search.Status == Victoria.Responses.Search.SearchStatus.NoMatches) 
-                    return new() { message = $"Could not find anything for '{query}'", ephemeral = true };
-                else if(search.Status == Victoria.Responses.Search.SearchStatus.LoadFailed)
-                    return new() { message = $"Failed to load track with URL: '{query}'", ephemeral = true };
-
-                track = search.Tracks.FirstOrDefault()!;
-                string? thumbnail = search_type switch
-                {
-                    Victoria.Responses.Search.SearchType.SoundCloud => await track.FetchArtworkAsync(),
-                    _ => null,
-                };
+                track = trackSearchResponse.Tracks.FirstOrDefault()!;
+                string? thumbnail = track.Artwork;
+                
                 var durstr = track.Duration.ToString("c");
 
-                if (player.Track != null && player.PlayerState is PlayerState.Playing ||  player.PlayerState is PlayerState.Paused)
+                if (player.Track is not null)
                 {
-                    player.Vueue.Enqueue(track);
+                    player.GetQueue().Enqueue(track);
 
                     var enqueuedEmbed = new EmbedBuilder()
                         .WithTitle($"Enqueued {track.Title}")
@@ -192,11 +185,8 @@ namespace TalkingBot.Core.Music
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
                 if(track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
 
-                await player.PlayAsync(track);
-                await player.SeekAsync(timecode);
-
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(
-                    new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+                await player.PlayAsync(_lavaNode, track);
+                await player.SeekAsync(_lavaNode, timecode);
                 
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
@@ -211,178 +201,193 @@ namespace TalkingBot.Core.Music
                 return new() { embed = embed };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> LeaveAsync(IGuild guild)
+        public async Task<InteractionResponse> LeaveAsync(IVoiceState voiceState, IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = "Not connected to any voice!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            var playerVoiceState = await TryGetVoiceState(guild);
+            if (playerVoiceState?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
+
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out var player);
-                if (!success) throw new Exception("Player get failed. Probably not connected");
-                if (player.PlayerState is PlayerState.Playing) await player.StopAsync();
-                await _lavaNode.LeaveAsync(player.VoiceChannel);
+                if (player.Track is not null)
+                    await StopAsync(guild);
+                await _lavaNode.LeaveAsync(playerVoiceState.VoiceChannel);
 
                 loopRemaining = 0;
                 isOnLoop = false;
 
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
-
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> StopAsync(IGuild guild)
+        public async Task<InteractionResponse> StopAsync(IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.Stopped || player.PlayerState is PlayerState.None) 
+                if (player.Track is null)
                     return new() { message = $"Music is already stopped" };
 
-                await player.StopAsync();
-                player.Vueue.Clear();
+                await player.StopAsync(_lavaNode, player.Track);
+                player.GetQueue().Clear();
 
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                // NOTE: This shouldn't be necessary because of OnTrackEnd event
+                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> PauseAsync(IGuild guild)
+        public async Task<InteractionResponse> PauseAsync(IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.Paused) 
+                if (player.IsPaused) 
                     return new() { message = $"Music is already paused", ephemeral = true};
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                if (player.Track is null) 
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
-                await player.PauseAsync();
+                await player.PauseAsync(_lavaNode);
 
                 return new() { message = $"Paused the music" };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> ResumeAsync(IGuild guild)
+        public async Task<InteractionResponse> ResumeAsync(IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.Playing) 
-                    return new() { message = $"Music is already playing" };
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                if (player.Track is null) 
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
+                else if(!player.IsPaused)
+                    return new() { message = $"Music is already playing" };
 
-                await player.ResumeAsync();
+                await player.ResumeAsync(_lavaNode, player.Track);
 
                 return new() { message = $"Resumed the music" };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static InteractionResponse RemoveTrack(IGuild guild, long index)
+        public async Task<InteractionResponse> RemoveTrack(IGuild guild, long index)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-                if (index - 1 < 0 || index > player.Vueue.Count) return new() 
-                { 
-                    message = $"Index is not present inside the Queue. Enter values from (1 to {player.Vueue.Count})",
-                    ephemeral = true 
+                LavaTrack trackRemoved;
+
+                // Remove last
+                if(index == -1) {
+                    trackRemoved = player.GetQueue().Last();
+                    player.GetQueue().Remove(trackRemoved);
+                    return new() { message = $"Removed the track **{trackRemoved.Title}**" };
+                }
+
+                if (index - 1 < 0 || index > player.GetQueue().Count) return new() 
+                {
+                    message = $"Index is not present inside the Queue."+
+                        " You can find specific index by running `queue` command",
+                    ephemeral = true
                 };
 
-                var trackRemoved = player.Vueue.RemoveAt((int)(index - 1));
+                trackRemoved = player.GetQueue().RemoveAt((int)(index - 1));
 
                 return new() { message = $"Removed the track **{trackRemoved.Title}**" };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> SkipAsync(IGuild guild)
+        public async Task<InteractionResponse> SkipAsync(IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.Paused) 
-                    return new() { message = $"Music is paused. Resume to skip." };
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                if (player.Track is null) 
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
-                if (player.Vueue.Count == 0) 
+                else if(player.IsPaused)
+                    return new() { message = $"Music is paused. Resume to skip." };
+                else if (player.GetQueue().Count == 0)
                     return new() { message = $"Only currently playing song is in the queue. " +
                         $"You can stop the playback using `/stop` or `/leave`" };
                 
-                await player.SkipAsync();
-
-                await TalkingBotClient._client!.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
-                    new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
-                
-                string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
+                // The workaround for skipping a song because just SkipAsync does nothing
+                // TODO: Why is this the case? It works but I want a legit method
+                await player.PauseAsync(_lavaNode);
+                (LavaTrack previous, LavaTrack current) = await player.SkipAsync(_lavaNode);
+                await player.ResumeAsync(_lavaNode, current);
+                await player.SeekAsync(_lavaNode, TimeSpan.Zero);
 
                 var embed = new EmbedBuilder()
-                    .WithTitle($"{player.Track.Title}")
-                    .WithDescription($"Now playing [**{player.Track.Title}**]({player.Track.Url})")
+                    .WithTitle($"{current.Title}")
+                    .WithDescription($"Now playing [**{current.Title}**]({current.Url})")
                     .WithColor(0x0A90FA)
-                    .WithThumbnailUrl(thumbnail)
-                    .AddField("Duration", player.Track.Duration.ToString("c"), true)
-                    .AddField("Video author", player.Track.Author)
+                    .WithThumbnailUrl(current.Artwork)
+                    .AddField("Duration", current.Duration.ToString("c"), true)
+                    .AddField("Video author", current.Author)
                     .Build();
 
-                return new() { embed = embed };
+                return new() { message = $"Skipped `{previous.Title}`.", embed = embed };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static InteractionResponse GetCurrentPosition(IGuild guild) {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+        public async Task<InteractionResponse> GetCurrentPosition(IGuild guild) {
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                if (player.Track is null) 
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
                 string curpos = $"{player.Track.Position.Hours.ToString("00")}:"+
@@ -390,20 +395,20 @@ namespace TalkingBot.Core.Music
 
                 return new() { message = $"Current track position: **{curpos}**/{player.Track.Duration.ToString("c")}", ephemeral = true };
             } catch(Exception ex) {
+                _logger.LogError(exception: ex, "Error was thrown.");
                 return new() { message = $"Error\n{ex.Message}", ephemeral = true };
             }
         }
-        public static InteractionResponse GetQueue(IGuild guild)
+        public async Task<InteractionResponse> GetQueue(IGuild guild)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if (player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped) 
+                if (player.Track is null)
                     return new() { message = $"No songs in queue. Add a song with `/play` command" };
 
                 var embedBuilder = new EmbedBuilder()
@@ -413,7 +418,7 @@ namespace TalkingBot.Core.Music
                     .WithColor(0x10FF90);
 
                 int i = 1;
-                foreach(LavaTrack track in player.Vueue)
+                foreach(LavaTrack track in player.GetQueue())
                 {
                     embedBuilder.AddField($"{i}", $"[**{track.Title}**]({track.Url})", true);
                     i++;
@@ -423,19 +428,19 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static InteractionResponse GetLength(IGuild guild) {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+        public async Task<InteractionResponse> GetLength(IGuild guild) {
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
-                if(player.PlayerState is PlayerState.None || player.PlayerState is PlayerState.Stopped)
+                if(player.Track is null)
                     return new() {
                         message = "Cannot display length of a track if it doesn't exist!",
                         ephemeral = true
@@ -447,111 +452,140 @@ namespace TalkingBot.Core.Music
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        public static async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
+        public async Task<InteractionResponse> ChangeVolume(IGuild guild, int volume)
         {
-            if(!_lavaNode.IsConnected) return LavalinkFailed();
-            if (!_lavaNode.HasPlayer(guild)) return new() { message = $"Not connected to any voice channel!", ephemeral = true };
+            if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
+            var player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if ((await TryGetVoiceState(guild))?.VoiceChannel is null)
+                return PlayerNotConnectedMessage();
 
             try
             {
-                var success = _lavaNode.TryGetPlayer(guild, out LavaPlayer<LavaTrack> player);
-                if (!success) throw new Exception("Player get failed. Idk what is the problem");
-
                 volume = volume <= 100 ? (volume >= 0 ? volume : 0) : 100;
 
-                await player.SetVolumeAsync(volume);
+                await player.SetVolumeAsync(_lavaNode, volume);
 
                 return new() { message = $"Changed volume to **{volume}**/100" };
             }
             catch (Exception e)
             {
+                _logger.LogError(exception: e, "Error was thrown.");
                 return new() { message = $"Error\n{e.Message}", ephemeral = true };
             }
         }
-        private static async Task OnTrackExceptionAsync(TrackExceptionEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        private async Task OnTrackExceptionAsync(TrackExceptionEventArg arg)
         {
-            arg.Player.Vueue.Enqueue(arg.Track);
-            await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it threw an exception.");
+            var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
+            player.GetQueue().Enqueue(arg.Track);
+            // await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it threw an exception."); // TODO
         }
-        private static async Task OnTrackStuckAsync(TrackStuckEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        private async Task OnTrackStuckAsync(TrackStuckEventArg arg)
         {
-            arg.Player.Vueue.Enqueue(arg.Track);
-            await arg.Player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it got stuck.");
+            // var guild = TalkingBotClient._client!.GetGuild(arg.GuildId);
+            var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
+            player.GetQueue().Enqueue(arg.Track);
+            // await player.TextChannel.SendMessageAsync($"{arg.Track} has been requeued because it got stuck."); // TODO
         }
-        private static Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
+        private Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
         {
-            Logger.Instance?.LogError($"{arg.Code} {arg.Reason}");
+            _logger.LogError("Websocket closed ({}): {}", arg.Code, arg.Reason);
             return Task.CompletedTask;
         }
-        private static Task OnStatsReceivedAsync(StatsEventArg arg)
-        {
+        public async Task OnTrackStartAsync(TrackStartEventArg arg) {
+            var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
+            var guild = _client.GetGuild(arg.GuildId);
 
-            return Task.CompletedTask;
-        }
-        public static Task OnUpdateReceivedAsync(UpdateEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg) {
-
-            return Task.CompletedTask;
-        }
-        public static Task OnTrackStartAsync(TrackStartEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg) {
+            await _client.GetShardFor(guild).SetActivityAsync(
+                new Game(arg.Track.Title, ActivityType.Listening, ActivityProperties.Join, arg.Track.Url));
             
-            return Task.CompletedTask;
         }
-        public static async Task OnTrackEndAsync(TrackEndEventArg<LavaPlayer<LavaTrack>, LavaTrack> arg)
+        public async Task OnTrackEndAsync(TrackEndEventArg arg)
         {
-            Logger.Instance?.LogDebug("Track ended!");
-            if (arg.Reason != TrackEndReason.Finished) 
+            var player = await _lavaNode.TryGetPlayerAsync(arg.GuildId);
+            var guild = _client.GetGuild(arg.GuildId);
+            _logger.LogDebug("Track ended!");
+
+            if(player is null || guild is null) {
+                _logger.LogDebug("Player was null or guild not found. Unable to continue playback.");
+                return;
+            }
+
+            if (arg.Reason != Victoria.Enums.TrackEndReason.Finished)
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogDebug("Queue finished!");
-                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                _logger.LogDebug("Queue finished!");
+                
+                var shard = _client.GetShardFor(guild);
+                await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
+                
                 return;
             }
             if(isOnLoop && (loopRemaining == -1 || loopRemaining > 0)) { // do loop
-                await arg.Player.PlayAsync(arg.Track);
+                await player.PlayAsync(_lavaNode, arg.Track);
                 loopRemaining -= (loopRemaining == -1) ? 0 : 1;
                 if(loopRemaining == 0) isOnLoop = false;
                 return;
             }
-            if (!arg.Player.Vueue.TryDequeue(out var queueable)) 
+            if (!player.GetQueue().TryDequeue(out var queueable)) 
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
-                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                _logger.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
+                await _client.GetShardFor(guild)
+                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
-            if (!(queueable is LavaTrack track))
+            if (queueable is not LavaTrack track)
             {
                 loopRemaining = 0;
                 isOnLoop = false;
-                Logger.Instance?.LogWarning($"Next item in queue is not a track");
-                await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                _logger.LogWarning($"Next item in queue is not a track");
+                await _client.GetShardFor(guild)
+                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
 
-            Logger.Instance?.LogDebug("Trying to play a new track!");
+            _logger.LogDebug("Trying to play a new track!");
 
-            await arg.Player.PlayAsync(track);
+            await player.PlayAsync(_lavaNode, track);
 
-            await TalkingBotClient._client!.GetShardFor(arg.Player.TextChannel.Guild).SetActivityAsync(new Game(track.Title, 
-                ActivityType.Listening, ActivityProperties.Join, track.Url));
+            await _client.GetShardFor(guild)
+                .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            
+            // string thumbnail = track.Artwork;
+            // var durstr = track.Duration.ToString("c");
 
-            string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
-            var durstr = track.Duration.ToString("c");
+            // var embed = new EmbedBuilder()
+            //         .WithTitle($"{track.Title}")
+            //         .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
+            //         .WithColor(0x0A90FA)
+            //         .WithThumbnailUrl(thumbnail)
+            //         .AddField("Duration", durstr, true)
+            //         .AddField("Video author", track.Author)
+            //         .Build();
+            
+            // await player.TextChannel.SendMessageAsync(embed: embed); // TODO
+        }
 
-            var embed = new EmbedBuilder()
-                    .WithTitle($"{track.Title}")
-                    .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
-                    .WithColor(0x0A90FA)
-                    .WithThumbnailUrl(thumbnail)
-                    .AddField("Duration", durstr, true)
-                    .AddField("Video author", track.Author)
-                    .Build();
-            await arg.Player.TextChannel.SendMessageAsync(embed: embed);
+        private static InteractionResponse LavalinkFailedMessage() =>
+            new() {
+                message = "Music service is now unavailable! Contact administrator if you have any questions.",
+                ephemeral = true 
+            };
+        
+        private static InteractionResponse PlayerNotConnectedMessage() =>
+            new() { message = $"Not connected to any voice channel!", ephemeral = true };
+
+        private async Task<IVoiceState?> TryGetVoiceState(IGuild guild) {
+            LavaPlayer<LavaTrack>? player = await _lavaNode.TryGetPlayerAsync(guild.Id);
+            if(player is null) return null;
+            IVoiceState? voiceState = await guild.GetCurrentUserAsync();
+            return voiceState;
         }
     }
 }
