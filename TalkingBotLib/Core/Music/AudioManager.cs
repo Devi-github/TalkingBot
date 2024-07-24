@@ -23,7 +23,6 @@ namespace TalkingBot.Core.Music
         private readonly DiscordClient _client;
         private readonly LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
         private readonly ILogger<AudioManager> _logger;
-        public HashSet<ulong> VoteQueue;
         
         private bool isOnLoop = false;
         private int loopRemaining = 0;
@@ -36,14 +35,12 @@ namespace TalkingBot.Core.Music
             _lavaNode = lavaNode;
             _logger = logger;
             _client = client;
-            
-            VoteQueue = [];
 
-            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStart += OnTrackStartAsync;
-            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
+            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStuck += OnTrackStuckAsync;
             _lavaNode.OnTrackException += OnTrackExceptionAsync;
+            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
         }
 
         // TODO: rebuild interaction system to use contexts and use them directly
@@ -191,10 +188,6 @@ namespace TalkingBot.Core.Music
                 await player.PlayAsync(_lavaNode, track);
                 await player.SeekAsync(_lavaNode, timecode);
                 
-                // NOTE: This shouldn't be necessary because of OnTrackStart event
-                // await _client.GetShardFor(guild).SetActivityAsync(
-                //     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
-                
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
@@ -229,9 +222,6 @@ namespace TalkingBot.Core.Music
 
                 loopRemaining = 0;
                 isOnLoop = false;
-
-                // NOTE: This shouldn't be necessary because of OnTrackEnd event
-                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
@@ -366,25 +356,23 @@ namespace TalkingBot.Core.Music
                     return new() { message = $"Only currently playing song is in the queue. " +
                         $"You can stop the playback using `/stop` or `/leave`" };
                 
-                await player.SkipAsync(_lavaNode);
+                // The workaround for skipping a song because just SkipAsync does nothing
+                // TODO: Why is this the case? It works but I want a legit method
+                await player.PauseAsync(_lavaNode);
+                (LavaTrack previous, LavaTrack current) = await player.SkipAsync(_lavaNode);
+                await player.ResumeAsync(_lavaNode, current);
+                await player.SeekAsync(_lavaNode, TimeSpan.Zero);
 
-                // NOTE: This should no longer be necessary because of OnTrackStart event
-                // await _client.GetShardFor(guild).SetActivityAsync(
-                //     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
-                
-                string thumbnail = player.Track.Artwork;
-
-                // TODO: Move to different place, like in some kind of PlayingNewTrack event
                 var embed = new EmbedBuilder()
-                    .WithTitle($"{player.Track.Title}")
-                    .WithDescription($"Now playing [**{player.Track.Title}**]({player.Track.Url})")
+                    .WithTitle($"{current.Title}")
+                    .WithDescription($"Now playing [**{current.Title}**]({current.Url})")
                     .WithColor(0x0A90FA)
-                    .WithThumbnailUrl(thumbnail)
-                    .AddField("Duration", player.Track.Duration.ToString("c"), true)
-                    .AddField("Video author", player.Track.Author)
+                    .WithThumbnailUrl(current.Artwork)
+                    .AddField("Duration", current.Duration.ToString("c"), true)
+                    .AddField("Video author", current.Author)
                     .Build();
 
-                return new() { embed = embed };
+                return new() { message = $"Skipped `{previous.Title}`.", embed = embed };
             }
             catch (Exception e)
             {
@@ -504,7 +492,7 @@ namespace TalkingBot.Core.Music
         }
         private Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
         {
-            _logger.LogError($"{arg.Code} {arg.Reason}");
+            _logger.LogError("Websocket closed ({}): {}", arg.Code, arg.Reason);
             return Task.CompletedTask;
         }
         public async Task OnTrackStartAsync(TrackStartEventArg arg) {
