@@ -13,34 +13,37 @@ using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
 using TalkingBot.Utils;
 using Victoria.WebSocket.EventArgs;
+using TalkingBot;
 
 namespace TalkingBot.Core.Music
 {
+    using DiscordClient = DiscordShardedClient;
     public class AudioManager
     {
-        private LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
-        private ILogger<AudioManager> _logger;
-        public HashSet<ulong> VoteQueue;
+        private readonly DiscordClient _client;
+        private readonly LavaNode<LavaPlayer<LavaTrack>, LavaTrack> _lavaNode;
+        private readonly ILogger<AudioManager> _logger;
         
+        private bool isOnLoop = false;
+        private int loopRemaining = 0;
+
         public AudioManager(
             LavaNode<LavaPlayer<LavaTrack>, LavaTrack> lavaNode,
-            ILogger<AudioManager> logger
+            ILogger<AudioManager> logger,
+            DiscordClient client
         ) {
             _lavaNode = lavaNode;
             _logger = logger;
-            
-            VoteQueue = [];
+            _client = client;
 
-            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStart += OnTrackStartAsync;
-            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
+            _lavaNode.OnTrackEnd += OnTrackEndAsync;
             _lavaNode.OnTrackStuck += OnTrackStuckAsync;
             _lavaNode.OnTrackException += OnTrackExceptionAsync;
+            _lavaNode.OnWebSocketClosed += OnWebSocketClosedAsync;
         }
 
-        private static bool isOnLoop = false;
-        private static int loopRemaining = 0;
-
+        // TODO: rebuild interaction system to use contexts and use them directly
         public async Task<InteractionResponse> JoinAsync(IGuild guild, IVoiceState voiceState)
         {
             if(!_lavaNode.IsConnected) return LavalinkFailedMessage();
@@ -185,9 +188,6 @@ namespace TalkingBot.Core.Music
                 await player.PlayAsync(_lavaNode, track);
                 await player.SeekAsync(_lavaNode, timecode);
                 
-                // await _client.GetShardFor(guild).SetActivityAsync(
-                //     new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
-                
                 var embed = new EmbedBuilder()
                     .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
@@ -223,8 +223,6 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
 
-                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
-
                 return new() { message = $"I have left the vc" };
             } catch(Exception e)
             {
@@ -247,6 +245,7 @@ namespace TalkingBot.Core.Music
                 await player.StopAsync(_lavaNode, player.Track);
                 player.GetQueue().Clear();
 
+                // NOTE: This shouldn't be necessary because of OnTrackEnd event
                 // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
@@ -357,25 +356,23 @@ namespace TalkingBot.Core.Music
                     return new() { message = $"Only currently playing song is in the queue. " +
                         $"You can stop the playback using `/stop` or `/leave`" };
                 
-                await player.SkipAsync(_lavaNode);
+                // The workaround for skipping a song because just SkipAsync does nothing
+                // TODO: Why is this the case? It works but I want a legit method
+                await player.PauseAsync(_lavaNode);
+                (LavaTrack previous, LavaTrack current) = await player.SkipAsync(_lavaNode);
+                await player.ResumeAsync(_lavaNode, current);
+                await player.SeekAsync(_lavaNode, TimeSpan.Zero);
 
-                // await _client.GetShardFor(guild).SetActivityAsync( // FIXME: This doesn't get set properly because of how SkipAsync works #11
-                //     new Game(player.Track.Title, ActivityType.Listening, ActivityProperties.Join, player.Track.Url));
-                
-                // string thumbnail = $"https://img.youtube.com/vi/{player.Track.Id}/0.jpg";
-                string thumbnail = player.Track.Artwork;
-
-                // TODO: Move to different place, like in some kind of PlayingNewTrack event
                 var embed = new EmbedBuilder()
-                    .WithTitle($"{player.Track.Title}")
-                    .WithDescription($"Now playing [**{player.Track.Title}**]({player.Track.Url})")
+                    .WithTitle($"{current.Title}")
+                    .WithDescription($"Now playing [**{current.Title}**]({current.Url})")
                     .WithColor(0x0A90FA)
-                    .WithThumbnailUrl(thumbnail)
-                    .AddField("Duration", player.Track.Duration.ToString("c"), true)
-                    .AddField("Video author", player.Track.Author)
+                    .WithThumbnailUrl(current.Artwork)
+                    .AddField("Duration", current.Duration.ToString("c"), true)
+                    .AddField("Video author", current.Author)
                     .Build();
 
-                return new() { embed = embed };
+                return new() { message = $"Skipped `{previous.Title}`.", embed = embed };
             }
             catch (Exception e)
             {
@@ -495,20 +492,25 @@ namespace TalkingBot.Core.Music
         }
         private Task OnWebSocketClosedAsync(WebSocketClosedEventArg arg)
         {
-            _logger.LogError($"{arg.Code} {arg.Reason}");
+            _logger.LogError("Websocket closed ({}): {}", arg.Code, arg.Reason);
             return Task.CompletedTask;
         }
-        public Task OnTrackStartAsync(TrackStartEventArg arg) {
+        public async Task OnTrackStartAsync(TrackStartEventArg arg) {
+            var player = await _lavaNode.GetPlayerAsync(arg.GuildId);
+            var guild = _client.GetGuild(arg.GuildId);
+
+            await _client.GetShardFor(guild).SetActivityAsync(
+                new Game(arg.Track.Title, ActivityType.Listening, ActivityProperties.Join, arg.Track.Url));
             
-            return Task.CompletedTask;
         }
         public async Task OnTrackEndAsync(TrackEndEventArg arg)
         {
             var player = await _lavaNode.TryGetPlayerAsync(arg.GuildId);
+            var guild = _client.GetGuild(arg.GuildId);
             _logger.LogDebug("Track ended!");
 
-            if(player is null) {
-                _logger.LogDebug("Player was null. Unable to continue playback.");
+            if(player is null || guild is null) {
+                _logger.LogDebug("Player was null or guild not found. Unable to continue playback.");
                 return;
             }
 
@@ -518,8 +520,8 @@ namespace TalkingBot.Core.Music
                 isOnLoop = false;
                 _logger.LogDebug("Queue finished!");
                 
-                // var shard = _client.GetShardFor(guild);
-                // await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                var shard = _client.GetShardFor(guild);
+                await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 
                 return;
             }
@@ -534,8 +536,8 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 _logger.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
-                // await _client.GetShardFor(guild)
-                //     .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await _client.GetShardFor(guild)
+                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
             if (queueable is not LavaTrack track)
@@ -543,8 +545,8 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 _logger.LogWarning($"Next item in queue is not a track");
-                // await _client.GetShardFor(guild)
-                //     .SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await _client.GetShardFor(guild)
+                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
 
@@ -552,20 +554,20 @@ namespace TalkingBot.Core.Music
 
             await player.PlayAsync(_lavaNode, track);
 
-            // await _client.GetShardFor(guild)
-            //     .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            await _client.GetShardFor(guild)
+                .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            
+            // string thumbnail = track.Artwork;
+            // var durstr = track.Duration.ToString("c");
 
-            string thumbnail = $"https://img.youtube.com/vi/{track.Id}/0.jpg";
-            var durstr = track.Duration.ToString("c");
-
-            var embed = new EmbedBuilder()
-                    .WithTitle($"{track.Title}")
-                    .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
-                    .WithColor(0x0A90FA)
-                    .WithThumbnailUrl(thumbnail)
-                    .AddField("Duration", durstr, true)
-                    .AddField("Video author", track.Author)
-                    .Build();
+            // var embed = new EmbedBuilder()
+            //         .WithTitle($"{track.Title}")
+            //         .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
+            //         .WithColor(0x0A90FA)
+            //         .WithThumbnailUrl(thumbnail)
+            //         .AddField("Duration", durstr, true)
+            //         .AddField("Video author", track.Author)
+            //         .Build();
             
             // await player.TextChannel.SendMessageAsync(embed: embed); // TODO
         }

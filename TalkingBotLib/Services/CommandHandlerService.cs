@@ -9,9 +9,11 @@ using TalkingBot.Modules;
 
 namespace TalkingBot.Services;
 
+using DiscordClient = DiscordShardedClient;
+
 public class CommandHandlerService(
     InteractionService interactions,
-    DiscordSocketClient client,
+    DiscordClient client,
     ILogger<CommandHandlerService> logger
 ) {
     ~CommandHandlerService() {
@@ -25,30 +27,37 @@ public class CommandHandlerService(
 
         logger.LogInformation("Loaded interaction modules: {} modules", interactions.Modules.Count);
 
-        client.Ready += async () => {
+        client.ShardReady += async shard => {
             Stopwatch sw = new();
-            foreach(var guild in ServiceManager.GetService<TalkingBotConfig>().Guilds!) {
-                sw.Restart();
-                await interactions.RegisterCommandsToGuildAsync(guild, true);
-                sw.Stop();
+            var guild = shard.Guilds.First() ?? throw new Exception("Shard did not have guilds");
 
-                logger.LogInformation("Registered commands for guild: {}. {} seconds elapsed.",
-                    client.GetGuild(guild).Name, sw.Elapsed.TotalSeconds
-                );
-            }
+            sw.Restart();
+            await interactions.RegisterCommandsToGuildAsync(guild.Id, true);
+            sw.Stop();
+
+            logger.LogInformation("Registered commands for guild: {}. {} seconds elapsed.",
+                guild.Name, sw.Elapsed.TotalSeconds
+            );
         };
         client.ButtonExecuted += ButtonExecutedAsync;
         client.InteractionCreated += InteractionExecutedAsync;
     }
     
     public async Task ButtonExecutedAsync(SocketMessageComponent interaction) {
-        var ctx = new SocketInteractionContext<SocketMessageComponent>(client, interaction);
+        var guildId = interaction.GuildId ?? throw new Exception("Interaction did not have valid guild ID associated.");
+        var shard = client.GetShardFor(client.GetGuild(guildId)) ??
+            throw new Exception($"Failed to get shard for guild ID {guildId}");
+
+        var ctx = new SocketInteractionContext<SocketMessageComponent>(shard, interaction);
         await interactions.ExecuteCommandAsync(ctx, ServiceManager.ServiceProvider);
     }
 
     public async Task InteractionExecutedAsync(SocketInteraction interaction) {
         try {
-            var context = new SocketInteractionContext(client, interaction);
+            var guildId = interaction.GuildId ?? throw new Exception("Interaction did not have valid guild ID associated.");
+            var shard = client.GetShardFor(client.GetGuild(guildId));
+
+            var context = new SocketInteractionContext(shard, interaction);
             var result = await interactions.ExecuteCommandAsync(context, ServiceManager.ServiceProvider);
 
             if(!result.IsSuccess) {
