@@ -16,7 +16,7 @@ namespace TalkingBot
                 LavalinkPort = 2333,
                 Token = "",
                 Guilds = [],
-                ForceUpdateCommands = false,
+                BuildCommandsGlobally = false,
                 LogLevel = Microsoft.Extensions.Logging.LogLevel.Information
             };
             using (StreamWriter sw = new(cnfpath))
@@ -63,7 +63,7 @@ namespace TalkingBot
                 LavalinkPort = 2333,
                 Token = token,
                 Guilds = [.. guilds],
-                ForceUpdateCommands = false,
+                BuildCommandsGlobally = false,
                 LogLevel = Microsoft.Extensions.Logging.LogLevel.Information
             };
 

@@ -18,8 +18,8 @@ namespace TalkingBot.Core
         public string? Token { get; set; }
         [JsonProperty("guilds")]
         public ulong[]? Guilds { get; set; }
-        [JsonProperty("forceUpdateCommands")]
-        public bool ForceUpdateCommands { get; set; }
+        [JsonProperty("buildCommandsGlobally")]
+        public bool BuildCommandsGlobally { get; set; }
         [JsonProperty("logLevel")]
         public LogLevel LogLevel { get; set; }
     }

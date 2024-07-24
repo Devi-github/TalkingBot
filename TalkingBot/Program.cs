@@ -33,10 +33,18 @@ namespace TalkingBotMain
             if(!File.Exists(cnfpath))
             {
                 Console.WriteLine("Config not found at: {0}\nCreating new one...", cnfpath);
-                await Config.CreateDefaultConfig(cnfpath);
+                await Config.CreateDefaultConfigNoIO(cnfpath);
             }
             string jsonconfig = File.ReadAllText(cnfpath);
-            TalkingBotConfig config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig)!;
+            TalkingBotConfig? config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig);
+
+            if(config is null) {
+                Console.WriteLine("Failed to parse config. Recreating...");
+                await Config.CreateDefaultConfigNoIO(cnfpath);
+                jsonconfig = File.ReadAllText(cnfpath);
+                await Task.Delay(2000);
+            }
+            config = JsonConvert.DeserializeObject<TalkingBotConfig>(jsonconfig)!;
 
             Console.Clear();
 

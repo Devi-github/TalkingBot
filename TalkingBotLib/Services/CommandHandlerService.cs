@@ -14,8 +14,12 @@ using DiscordClient = DiscordShardedClient;
 public class CommandHandlerService(
     InteractionService interactions,
     DiscordClient client,
-    ILogger<CommandHandlerService> logger
+    ILogger<CommandHandlerService> logger,
+    TalkingBotConfig talkingBotConfig
 ) {
+    // Used only in global context
+    private bool registeredGlobally = false;
+
     ~CommandHandlerService() {
         interactions.Dispose();
     }
@@ -32,12 +36,25 @@ public class CommandHandlerService(
             var guild = shard.Guilds.First() ?? throw new Exception("Shard did not have guilds");
 
             sw.Restart();
-            await interactions.RegisterCommandsToGuildAsync(guild.Id, true);
-            sw.Stop();
+            if(talkingBotConfig.BuildCommandsGlobally) {
+                if(registeredGlobally) return;
 
-            logger.LogInformation("Registered commands for guild: {}. {} seconds elapsed.",
-                guild.Name, sw.Elapsed.TotalSeconds
-            );
+                await interactions.RegisterCommandsGloballyAsync(true);
+                
+                sw.Stop();
+                logger.LogInformation("Registered commands globally. {} seconds elapsed.",
+                    sw.Elapsed.TotalSeconds
+                );
+
+                registeredGlobally = true;
+            }
+            else {
+                await interactions.RegisterCommandsToGuildAsync(guild.Id, true);
+                sw.Stop();
+                logger.LogInformation("Registered commands for guild: {}. {} seconds elapsed.",
+                    guild.Name, sw.Elapsed.TotalSeconds
+                );
+            }
         };
         client.ButtonExecuted += ButtonExecutedAsync;
         client.InteractionCreated += InteractionExecutedAsync;
