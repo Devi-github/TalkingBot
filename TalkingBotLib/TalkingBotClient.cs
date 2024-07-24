@@ -84,6 +84,8 @@ namespace TalkingBot
 
         private async Task Ready(DiscordSocketClient shard) {
             await ServiceManager.ServiceProvider.UseLavaNodeAsync();
+            await shard.SetActivityAsync(
+                new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
 
             _logger.LogInformation("Logged in as a shard {}!", shard.CurrentUser.Username);
         }

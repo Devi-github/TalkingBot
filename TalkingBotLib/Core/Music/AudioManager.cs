@@ -508,6 +508,9 @@ namespace TalkingBot.Core.Music
             var player = await _lavaNode.TryGetPlayerAsync(arg.GuildId);
             var guild = _client.GetGuild(arg.GuildId);
             _logger.LogDebug("Track ended!");
+            
+            var shard = _client.GetShardFor(guild);
+            await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
 
             if(player is null || guild is null) {
                 _logger.LogDebug("Player was null or guild not found. Unable to continue playback.");
@@ -520,7 +523,6 @@ namespace TalkingBot.Core.Music
                 isOnLoop = false;
                 _logger.LogDebug("Queue finished!");
                 
-                var shard = _client.GetShardFor(guild);
                 await shard.SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 
                 return;
@@ -529,6 +531,13 @@ namespace TalkingBot.Core.Music
                 await player.PlayAsync(_lavaNode, arg.Track);
                 loopRemaining -= (loopRemaining == -1) ? 0 : 1;
                 if(loopRemaining == 0) isOnLoop = false;
+                await shard
+                    .SetActivityAsync(new Game(
+                        player.Track.Title, 
+                        ActivityType.Listening,
+                        ActivityProperties.Join,
+                        player.Track.Url)
+                    );
                 return;
             }
             if (!player.GetQueue().TryDequeue(out var queueable)) 
@@ -536,8 +545,8 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 _logger.LogDebug("Dequeue was not successful. Probably no tracks remaining.");
-                await _client.GetShardFor(guild)
-                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
+                await shard.SetActivityAsync(
+                    new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
             if (queueable is not LavaTrack track)
@@ -545,8 +554,8 @@ namespace TalkingBot.Core.Music
                 loopRemaining = 0;
                 isOnLoop = false;
                 _logger.LogWarning($"Next item in queue is not a track");
-                await _client.GetShardFor(guild)
-                    .SetActivityAsync(new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
+                await shard.SetActivityAsync(
+                    new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
                 return;
             }
 
@@ -554,8 +563,8 @@ namespace TalkingBot.Core.Music
 
             await player.PlayAsync(_lavaNode, track);
 
-            await _client.GetShardFor(guild)
-                .SetActivityAsync(new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
+            await shard.SetActivityAsync(
+                new Game(track.Title, ActivityType.Listening, ActivityProperties.Join, track.Url));
             
             // string thumbnail = track.Artwork;
             // var durstr = track.Duration.ToString("c");
