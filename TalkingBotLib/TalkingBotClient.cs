@@ -45,6 +45,8 @@ namespace TalkingBot
         private CommandHandlerService _commandService;
         private ILogger<DiscordClient> _logger;
 
+        private int shardsReady = 0;
+
         public TalkingBotClient(TalkingBotConfig tbConfig, DiscordSocketConfig? clientConfig = null)
         {
             _talkingBotConfig = tbConfig;
@@ -80,14 +82,27 @@ namespace TalkingBot
             _client.ShardReady += Ready;
             _client.UserVoiceStateUpdated += OnUserVoiceUpdate;
             _client.ShardDisconnected += OnDisconnect;
+
+            _lavaNode.OnReady += arg => {
+                _logger.LogInformation("Connected to LavaNode.");
+                return Task.CompletedTask;
+            };
         }
 
         private async Task Ready(DiscordSocketClient shard) {
-            await ServiceManager.ServiceProvider.UseLavaNodeAsync();
+            shardsReady++;
+
+            if(shardsReady >= _client.Shards.Count)
+                await ShardsReady();
+
             await shard.SetActivityAsync(
                 new Game($"Nothing", ActivityType.Listening, ActivityProperties.Instance));
 
             _logger.LogInformation("Logged in as a shard {}!", shard.CurrentUser.Username);
+        }
+
+        private static async Task ShardsReady() {
+            await ServiceManager.ServiceProvider.UseLavaNodeAsync();
         }
 
         private void SetServices() {
@@ -115,7 +130,7 @@ namespace TalkingBot
                     config.Authorization = "youshallnotpass";
                     config.SelfDeaf = false;
                     config.SocketConfiguration = new() {
-                        ReconnectAttempts = 3, 
+                        ReconnectAttempts = 3,
                         ReconnectDelay = 5, 
                         BufferSize = 1024
                     };

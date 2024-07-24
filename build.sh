@@ -1,4 +1,4 @@
 #!/bin/sh
 
-docker build . -t talkingbot:latest
-docker image push pi4er/talkingbot:latest
+docker build . -t pi4er/talkingbot:nightly
+docker push pi4er/talkingbot:nightly
