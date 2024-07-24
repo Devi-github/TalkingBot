@@ -1,0 +1,11 @@
+Config.json
+Cache
+.vscode
+TalkingBot/Cache
+TalkingBot/bin
+TalkingBot/obj
+TalkingBot/Config.json
+TalkingBotLib/bin
+TalkingBotLib/obj
+RegenerateConfig/bin
+RegenerateConfig/obj

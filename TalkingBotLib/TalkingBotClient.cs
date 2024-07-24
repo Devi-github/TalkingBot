@@ -69,6 +69,9 @@ namespace TalkingBot
             _audioManager = ServiceManager.GetService<AudioManager>();
             _commandService = ServiceManager.GetService<CommandHandlerService>();
 
+            _logger.LogDebug("Connecting to lavalink host: {}:{}",
+                _talkingBotConfig.LavalinkHostname, _talkingBotConfig.LavalinkPort);
+
             SetEvents();
         }
 
@@ -105,18 +108,16 @@ namespace TalkingBot
                 .AddSingleton<CommandHandlerService>()
                 .AddLavaNode<LavaNode<LavaPlayer<LavaTrack>, LavaTrack>,
                     LavaPlayer<LavaTrack>, LavaTrack>(config => {
-                    config = new() {
-                        Hostname = _talkingBotConfig.LavalinkHostname,
-                        Port = _talkingBotConfig.LavalinkPort,
-                        Authorization = "youshallnotpass",
-                        SelfDeaf = false,
-                        SocketConfiguration = new() {
-                            ReconnectAttempts = 3, 
-                            ReconnectDelay = 5, 
-                            BufferSize = 1024
-                        },
-                        IsSecure = false
+                    config.Hostname = _talkingBotConfig.LavalinkHostname;
+                    config.Port = _talkingBotConfig.LavalinkPort;
+                    config.Authorization = "youshallnotpass";
+                    config.SelfDeaf = false;
+                    config.SocketConfiguration = new() {
+                        ReconnectAttempts = 3, 
+                        ReconnectDelay = 5, 
+                        BufferSize = 1024
                     };
+                    config.IsSecure = false;
                 });
 
             ServiceManager.SetProvider(collection);
