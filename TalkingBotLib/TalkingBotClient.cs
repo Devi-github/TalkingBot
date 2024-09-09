@@ -132,9 +132,10 @@ namespace TalkingBot
                     config.SocketConfiguration = new() {
                         ReconnectAttempts = 3,
                         ReconnectDelay = 5, 
-                        BufferSize = 1024
+                        BufferSize = 8192
                     };
                     config.IsSecure = false;
+                    // TODO: Make lava node configuration accessible outside
                 });
 
             ServiceManager.SetProvider(collection);

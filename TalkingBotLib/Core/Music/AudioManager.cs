@@ -186,37 +186,65 @@ namespace TalkingBot.Core.Music
 
                 if (player.Track is not null)
                 {
-                    player.GetQueue().Enqueue(track);
+                    if(trackSearchResponse.Type is Victoria.Rest.Search.SearchType.Playlist) {
+                        foreach(var playlistTrack in trackSearchResponse.Tracks) {
+                            player.GetQueue().Enqueue(track);
+                        }
 
-                    var enqueuedEmbed = new EmbedBuilder()
-                        .WithTitle($"Enqueued {track.Title}")
-                        .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
-                        .WithColor(0x0A90FA)
-                        .WithThumbnailUrl(thumbnail)
-                        .AddField("Duration", durstr, true)
-                        .AddField("Requested by", user.Mention, true)
-                        .AddField("Video author", track.Author)
-                        .Build();
+                        var selectedTrack = trackSearchResponse.Tracks
+                            .ElementAt(trackSearchResponse.Playlist.SelectedTrack);
 
-                    return new() { embed = enqueuedEmbed };
+                        var enqueuedEmbed = new EmbedBuilder()
+                            .WithTitle($"Enqueued playlist {trackSearchResponse.Playlist.Name}")
+                            .WithDescription($"Added playlist {trackSearchResponse.Playlist.Name} to the queue."+
+                                $" First track: [**{selectedTrack.Title}**]({selectedTrack.Url})")
+                            .WithThumbnailUrl(selectedTrack.Artwork)
+                            .Build();
+
+                        return new() { embed = enqueuedEmbed };
+                    } else {
+                        player.GetQueue().Enqueue(track);
+
+                        var enqueuedEmbed = new EmbedBuilder()
+                            .WithTitle($"Enqueued {track.Title}")
+                            .WithDescription($"Added [**{track.Title}**]({track.Url}) to the queue")
+                            .WithColor(0x0A90FA)
+                            .WithThumbnailUrl(thumbnail)
+                            .AddField("Duration", durstr, true)
+                            .AddField("Requested by", user.Mention, true)
+                            .AddField("Video author", track.Author)
+                            .Build();
+                        
+                        return new() { embed = enqueuedEmbed };
+                    }
                 }
                 TimeSpan timecode = TimeSpan.FromSeconds(seconds);
                 if(track.Duration < timecode) return new() { message = "Set timecode is outside of track's length!", ephemeral = true};
 
-                await player.PlayAsync(_lavaNode, track);
-                await player.SeekAsync(_lavaNode, timecode);
-                
                 var embed = new EmbedBuilder()
-                    .WithTitle($"{track.Title}")
                     .WithDescription($"Now playing [**{track.Title}**]({track.Url})")
                     .WithColor(0x0A90FA)
                     .WithThumbnailUrl(thumbnail)
                     .AddField("Duration", durstr, true)
                     .AddField("Requested by", user.Mention, true)
-                    .AddField("Video author", track.Author)
-                    .Build();
+                    .AddField("Video author", track.Author);
 
-                return new() { embed = embed };
+                if(trackSearchResponse.Type is Victoria.Rest.Search.SearchType.Playlist) {
+                    foreach(var playlistTrack in trackSearchResponse.Tracks) {
+                        if(playlistTrack == track)
+                            continue;
+
+                        player.GetQueue().Enqueue(track);
+                    }
+                    embed = embed.WithTitle($"Playlist {trackSearchResponse.Playlist.Name}");
+                } else {
+                    embed = embed.WithTitle($"{track.Title}");
+                }
+
+                await player.PlayAsync(_lavaNode, track);
+                await player.SeekAsync(_lavaNode, timecode);
+
+                return new() { embed = embed.Build() };
             } catch(Exception e)
             {
                 _logger.LogError(exception: e, "Error was thrown.");
@@ -234,8 +262,10 @@ namespace TalkingBot.Core.Music
 
             try
             {
-                if (player.Track is not null)
-                    await StopAsync(guild);
+                if (player.Track is not null) {
+                    player.GetQueue().Clear();
+                    await player.StopAsync(_lavaNode, player.Track);
+                }
                 await _lavaNode.LeaveAsync(playerVoiceState.VoiceChannel);
 
                 loopRemaining = 0;
@@ -260,11 +290,8 @@ namespace TalkingBot.Core.Music
                 if (player.Track is null)
                     return new() { message = $"Music is already stopped" };
 
-                await player.StopAsync(_lavaNode, player.Track);
                 player.GetQueue().Clear();
-
-                // NOTE: This shouldn't be necessary because of OnTrackEnd event
-                // await _client.GetShardFor(guild).SetActivityAsync(new Game($"Nothing", ActivityType.Watching, ActivityProperties.Instance));
+                await player.StopAsync(_lavaNode, player.Track);
 
                 return new() { message = $"Stopped playing the music and cleared the queue" };
             }
@@ -343,7 +370,7 @@ namespace TalkingBot.Core.Music
                 if (index - 1 < 0 || index > player.GetQueue().Count) return new() 
                 {
                     message = $"Index is not present inside the Queue."+
-                        " You can find specific index by running `queue` command",
+                        " You can find specific index by running `/queue` command",
                     ephemeral = true
                 };
 
