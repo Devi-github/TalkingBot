@@ -14,9 +14,9 @@ namespace TalkingBot.Core.Caching {
             
             if(!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-            using(StreamWriter sw = new StreamWriter(dir + filename)) {
-                sw.Write(json);
-            }
+            using StreamWriter sw = new(dir + filename);
+
+            sw.Write(json);
         }
         public T[]? LoadCached(string typename) {
             string filename = $"cache_{typename}.json";
@@ -29,8 +29,6 @@ namespace TalkingBot.Core.Caching {
 
                 json = sr.ReadToEnd();
             } catch(IOException) {
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                File.Create(dir + filename);
                 return null;
             }
 
